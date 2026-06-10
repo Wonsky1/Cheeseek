@@ -1,24 +1,13 @@
-//
-//  ContentView.swift
-//  Myshachki
-//
-//  Created by Vlad Pidborskyi on 08.06.2026.
-//
-
 import SwiftUI
 
 struct ContentView: View {
+    let dependencies: AppDependencies
+
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
-        }
-        .padding()
+        RootTabView(dependencies: dependencies)
     }
 }
 
 #Preview {
-    ContentView()
+    ContentView(dependencies: .preview)
 }

@@ -1,0 +1,37 @@
+import SwiftUI
+
+struct ActivityView: View {
+    @ObservedObject var viewModel: ActivityViewModel
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if viewModel.sessions.isEmpty {
+                    ContentUnavailableView("No walks yet", systemImage: "figure.walk", description: Text("Finish your first walk and it will appear here."))
+                } else {
+                    List(viewModel.sessions) { session in
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(session.startedAt.formatted(date: .abbreviated, time: .shortened))
+                                .font(.headline)
+                            HStack {
+                                Label(session.distanceMeters.formattedDistance, systemImage: "ruler")
+                                Label(session.durationSeconds.formattedClock, systemImage: "timer")
+                            }
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            Text(session.syncStatus.label)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 6)
+                    }
+                    .listStyle(.automatic)
+                }
+            }
+            .navigationTitle("Activity")
+        }
+        .task {
+            await viewModel.refresh()
+        }
+    }
+}

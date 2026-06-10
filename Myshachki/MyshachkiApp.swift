@@ -9,9 +9,11 @@ import SwiftUI
 
 @main
 struct MyshachkiApp: App {
+    @StateObject private var dependencies = AppDependencies.live
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView(dependencies: dependencies)
         }
     }
 }

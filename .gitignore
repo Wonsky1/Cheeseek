@@ -1,0 +1,40 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Xcode user state
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+
+# Xcode build output
+build/
+DerivedData/
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager local state
+.build/
+.swiftpm/
+Package.resolved
+
+# CocoaPods / Carthage outputs, if added later
+Pods/
+Carthage/Build/
+
+# Editor and local environment
+.vscode/
+.idea/
+*.swp
+*.swo
+*.log
+.env
+.env.*
+
+# Fastlane output, if added later
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output/
