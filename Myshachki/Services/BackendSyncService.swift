@@ -3,6 +3,7 @@ import Foundation
 
 protocol BackendSyncServing {
     func syncWalkSession(_ session: WalkSession) async throws
+    func fetchWalkSessions(userId: UUID) async throws -> [WalkSession]
     func fetchSharedProgress() async throws -> SharedProgress
     func uploadTrackPoints(sessionId: UUID, userId: UUID, points: [TrackPoint]) async throws
     func fetchCoverage(userId: UUID, areaId: String) async throws -> Set<String>
@@ -39,6 +40,29 @@ final class HTTPBackendSyncService: BackendSyncServing {
         )
         let _: WalkSessionResponseDTO = try await apiClient.post("/walk-sessions", body: request)
         try await uploadTrackPoints(sessionId: session.id, userId: userId, points: session.points)
+        let syncedRequest = WalkSessionCreateRequest(
+            id: session.id,
+            userId: userId,
+            startedAt: session.startedAt,
+            endedAt: session.endedAt,
+            distanceMeters: session.distanceMeters,
+            durationSeconds: session.durationSeconds,
+            syncStatus: SyncStatus.synced.rawValue
+        )
+        let _: WalkSessionResponseDTO = try await apiClient.post("/walk-sessions", body: syncedRequest)
+    }
+
+    func fetchWalkSessions(userId: UUID) async throws -> [WalkSession] {
+        let response: [WalkSessionResponseDTO]
+        do {
+            response = try await apiClient.get(
+                "/walk-sessions",
+                queryItems: [URLQueryItem(name: "userId", value: userId.uuidString)]
+            )
+        } catch APIClientError.serverError(statusCode: 404) {
+            return []
+        }
+        return response.map { WalkSession(dto: $0) }
     }
 
     func fetchSharedProgress() async throws -> SharedProgress {
@@ -129,6 +153,7 @@ final class HTTPBackendSyncService: BackendSyncServing {
 @MainActor
 final class MockBackendSyncService: BackendSyncServing {
     func syncWalkSession(_ session: WalkSession) async throws {}
+    func fetchWalkSessions(userId: UUID) async throws -> [WalkSession] { [] }
     func fetchSharedProgress() async throws -> SharedProgress { .placeholder }
     func uploadTrackPoints(sessionId: UUID, userId: UUID, points: [TrackPoint]) async throws {}
     func fetchCoverage(userId: UUID, areaId: String) async throws -> Set<String> { [] }

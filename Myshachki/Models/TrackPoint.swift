@@ -35,4 +35,15 @@ extension TrackPoint {
             timestamp: location.timestamp
         )
     }
+
+    init(dto: TrackPointDTO) {
+        self.init(
+            id: dto.id,
+            latitude: dto.latitude,
+            longitude: dto.longitude,
+            altitude: dto.altitude,
+            horizontalAccuracy: dto.horizontalAccuracy,
+            timestamp: dto.timestamp
+        )
+    }
 }

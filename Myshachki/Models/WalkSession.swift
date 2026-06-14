@@ -28,4 +28,17 @@ extension WalkSession {
             syncStatus: .localOnly
         )
     }
+
+    init(dto: WalkSessionResponseDTO) {
+        self.init(
+            id: dto.id,
+            startedAt: dto.startedAt,
+            endedAt: dto.endedAt,
+            distanceMeters: dto.distanceMeters,
+            durationSeconds: dto.durationSeconds,
+            points: dto.points.map { TrackPoint(dto: $0) },
+            userId: dto.userId.uuidString,
+            syncStatus: SyncStatus(rawValue: dto.syncStatus) ?? .synced
+        )
+    }
 }

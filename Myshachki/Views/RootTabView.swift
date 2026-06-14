@@ -19,7 +19,8 @@ struct RootTabView: View {
         ))
         _activityViewModel = StateObject(wrappedValue: ActivityViewModel(
             walkSessionStore: dependencies.walkSessionStore,
-            profileService: dependencies.profileService
+            profileService: dependencies.profileService,
+            backendSyncService: dependencies.backendSyncService
         ))
         _profileViewModel = StateObject(wrappedValue: ProfileViewModel(
             profileService: dependencies.profileService,
@@ -34,7 +35,11 @@ struct RootTabView: View {
                     Label("Map", systemImage: "map")
                 }
 
-            ActivityView(viewModel: activityViewModel)
+            ActivityView(
+                viewModel: activityViewModel,
+                backendSyncService: dependencies.backendSyncService,
+                walkSessionStore: dependencies.walkSessionStore
+            )
                 .tabItem {
                     Label("Activity", systemImage: "figure.walk")
                 }

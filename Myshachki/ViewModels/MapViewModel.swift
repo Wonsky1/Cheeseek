@@ -214,8 +214,23 @@ final class MapViewModel: ObservableObject {
             try await walkSessionStore.saveSession(session)
             storedSessions.insert(session, at: 0)
             await persistCoverage(from: session)
+            if session.points.count > 1 {
+                session.syncStatus = .syncing
+                try await walkSessionStore.saveSession(session)
+                syncStatusText = session.syncStatus.label
+                try await backendSyncService.syncWalkSession(session)
+                session.syncStatus = .synced
+                try await walkSessionStore.saveSession(session)
+                if let index = storedSessions.firstIndex(where: { $0.id == session.id }) {
+                    storedSessions[index] = session
+                }
+            }
         } catch {
             session.syncStatus = .failed
+            try? await walkSessionStore.saveSession(session)
+            if let index = storedSessions.firstIndex(where: { $0.id == session.id }) {
+                storedSessions[index] = session
+            }
         }
         activeSession = nil
         activeCoverageSideIDs = []
