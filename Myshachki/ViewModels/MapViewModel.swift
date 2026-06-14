@@ -47,6 +47,8 @@ final class MapViewModel: ObservableObject {
     private let coverageAreaID = "osm-building-sides-v1"
     private let boardLatSpan = 0.014
     private let boardLonSpan = 0.021
+    private let liveRouteInterpolationStepMeters = 2.0
+    private let maxLiveRouteVisualCoordinates = 700
 
     init(
         locationManager: LocationManager,
@@ -636,6 +638,9 @@ final class MapViewModel: ObservableObject {
 
     private func routeFeature(from points: [TrackPoint], status: String) -> [String: Any]? {
         guard points.count > 1 else { return nil }
+        let coordinates = status == "active"
+            ? interpolatedRouteCoordinates(from: points)
+            : points.map(\.coordinate)
         return [
             "type": "Feature",
             "properties": [
@@ -643,9 +648,33 @@ final class MapViewModel: ObservableObject {
             ],
             "geometry": [
                 "type": "LineString",
-                "coordinates": points.map { [$0.longitude, $0.latitude] }
+                "coordinates": coordinates.map { [$0.longitude, $0.latitude] }
             ]
         ]
+    }
+
+    private func interpolatedRouteCoordinates(from points: [TrackPoint]) -> [CLLocationCoordinate2D] {
+        guard let first = points.first?.coordinate else { return [] }
+        var coordinates = [first]
+        for pair in zip(points, points.dropFirst()) {
+            let start = pair.0.coordinate
+            let end = pair.1.coordinate
+            let distance = pair.0.location.distance(from: pair.1.location)
+            let stepCount = max(1, Int(ceil(distance / liveRouteInterpolationStepMeters)))
+            for step in 1...stepCount {
+                let progress = Double(step) / Double(stepCount)
+                coordinates.append(
+                    CLLocationCoordinate2D(
+                        latitude: start.latitude + ((end.latitude - start.latitude) * progress),
+                        longitude: start.longitude + ((end.longitude - start.longitude) * progress)
+                    )
+                )
+                if coordinates.count >= maxLiveRouteVisualCoordinates {
+                    return coordinates
+                }
+            }
+        }
+        return coordinates
     }
 
     private func localFeatureCollection() -> String {

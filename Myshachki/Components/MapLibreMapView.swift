@@ -14,6 +14,7 @@ struct MapLibreMapView: UIViewRepresentable {
     var perspectiveMode: MapPerspectiveMode = .flat
     var styleMode: MapStyleMode = .light
     var showsUserLocation = true
+    var smoothUserLocation = true
     var fitsRouteBounds = false
     var onUserInteraction: (() -> Void)?
 
@@ -34,7 +35,7 @@ struct MapLibreMapView: UIViewRepresentable {
 
     func updateUIView(_ webView: WKWebView, context: Context) {
         let script = """
-        window.myshachkiSetData(\(buildingGeoJSON), \(routeGeoJSON), {\(Self.centerJavaScript(center))}, "\(Self.escapedJavaScriptString(storageKey))", { showsUserLocation: \(showsUserLocation), fitsRouteBounds: \(fitsRouteBounds), perspectiveMode: "\(perspectiveMode.rawValue)", styleMode: "\(styleMode.rawValue)", userLocation: \(Self.optionalCoordinateJavaScript(userCoordinate)) });
+        window.myshachkiSetData(\(buildingGeoJSON), \(routeGeoJSON), {\(Self.centerJavaScript(center))}, "\(Self.escapedJavaScriptString(storageKey))", { showsUserLocation: \(showsUserLocation), smoothUserLocation: \(smoothUserLocation), fitsRouteBounds: \(fitsRouteBounds), perspectiveMode: "\(perspectiveMode.rawValue)", styleMode: "\(styleMode.rawValue)", userLocation: \(Self.optionalCoordinateJavaScript(userCoordinate)) });
         """
         context.coordinator.onUserInteraction = onUserInteraction
         context.coordinator.enqueue(script)
@@ -253,7 +254,7 @@ struct MapLibreMapView: UIViewRepresentable {
           center: { lat: 52.2297, lon: 21.0122 },
           userLocation: null,
           storageKey: 'anonymous',
-          options: { showsUserLocation: true, fitsRouteBounds: false }
+          options: { showsUserLocation: true, smoothUserLocation: true, fitsRouteBounds: false }
         };
         let buildingQueryLayers = ['building'];
         let buildingQueryRadiusPixels = 30;
@@ -273,7 +274,7 @@ struct MapLibreMapView: UIViewRepresentable {
         let persistedSaveDelayMs = 900;
         let persistedSaveState = { timer: null };
         let coverAnimationState = { frame: null };
-        let userAnimationState = { frame: null, coordinate: null };
+        let userAnimationState = { frame: null, coordinate: null, lastTargetAt: 0 };
         let sourceUpdateState = { routeSignature: '', overlaySignature: '', availableOverlaySignature: '', cameraSignature: '', lastCameraAt: 0 };
         let storagePrefix = 'myshachki.coveredBuildings.v2.';
         let maxPersistedFeatures = 5000;
@@ -983,8 +984,16 @@ struct MapLibreMapView: UIViewRepresentable {
           if (userAnimationState.frame !== null) {
             cancelAnimationFrame(userAnimationState.frame);
           }
+          if (pending.options.smoothUserLocation === false) {
+            userAnimationState.coordinate = next;
+            userAnimationState.lastTargetAt = performance.now();
+            map.getSource('myshachki-user').setData(userLocationFeatureCollectionFor(next));
+            return;
+          }
           const startedAt = performance.now();
-          const duration = 650;
+          const updateInterval = userAnimationState.lastTargetAt > 0 ? startedAt - userAnimationState.lastTargetAt : 650;
+          userAnimationState.lastTargetAt = startedAt;
+          const duration = Math.max(650, Math.min(1800, updateInterval * 0.92));
           const tick = () => {
             const progress = Math.min(1, (performance.now() - startedAt) / duration);
             const eased = 1 - Math.pow(1 - progress, 3);

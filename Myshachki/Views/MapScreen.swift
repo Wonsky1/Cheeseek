@@ -15,6 +15,7 @@ struct MapScreen: View {
                 perspectiveMode: viewModel.mapPerspectiveMode,
                 styleMode: viewModel.mapStyleMode,
                 showsUserLocation: viewModel.showsUserLocation,
+                smoothUserLocation: !viewModel.isAdminMode,
                 onUserInteraction: { viewModel.userDidMoveMap() }
             )
             .ignoresSafeArea()
