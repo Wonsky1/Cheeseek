@@ -46,12 +46,13 @@ final class WalkSummaryViewModel: ObservableObject {
 
     var routeGeoJSON: String {
         guard session.points.count > 1 else { return emptyFeatureCollection }
+        let routeStatus = syncStatusText == SyncStatus.synced.label ? "explored" : "active"
         return jsonString([
             "type": "FeatureCollection",
             "features": [[
                 "type": "Feature",
                 "properties": [
-                    "status": "active"
+                    "status": routeStatus
                 ],
                 "geometry": [
                     "type": "LineString",

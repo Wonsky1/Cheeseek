@@ -15,13 +15,22 @@ enum APIClientError: Error, LocalizedError {
 }
 
 struct APIClient {
-    let baseURL: URL
+    private let baseURLProvider: () -> URL
     private let session: URLSession
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
 
     init(baseURL: URL, session: URLSession = .shared) {
-        self.baseURL = baseURL
+        self.baseURLProvider = { baseURL }
+        self.session = session
+        self.encoder = JSONEncoder()
+        self.decoder = JSONDecoder()
+        encoder.dateEncodingStrategy = .iso8601
+        decoder.dateDecodingStrategy = .iso8601
+    }
+
+    init(baseURLProvider: @escaping () -> URL, session: URLSession = .shared) {
+        self.baseURLProvider = baseURLProvider
         self.session = session
         self.encoder = JSONEncoder()
         self.decoder = JSONDecoder()
@@ -30,13 +39,13 @@ struct APIClient {
     }
 
     func get<Response: Decodable>(_ path: String) async throws -> Response {
-        var request = URLRequest(url: baseURL.appending(path: path))
+        var request = URLRequest(url: baseURLProvider().appending(path: path))
         request.httpMethod = "GET"
         return try await send(request)
     }
 
     func get<Response: Decodable>(_ path: String, queryItems: [URLQueryItem]) async throws -> Response {
-        var components = URLComponents(url: baseURL.appending(path: path), resolvingAgainstBaseURL: false)
+        var components = URLComponents(url: baseURLProvider().appending(path: path), resolvingAgainstBaseURL: false)
         components?.queryItems = queryItems
         guard let url = components?.url else {
             throw APIClientError.invalidResponse
@@ -47,7 +56,7 @@ struct APIClient {
     }
 
     func getRawString(_ path: String, queryItems: [URLQueryItem]) async throws -> String {
-        var components = URLComponents(url: baseURL.appending(path: path), resolvingAgainstBaseURL: false)
+        var components = URLComponents(url: baseURLProvider().appending(path: path), resolvingAgainstBaseURL: false)
         components?.queryItems = queryItems
         guard let url = components?.url else {
             throw APIClientError.invalidResponse
@@ -62,7 +71,7 @@ struct APIClient {
     }
 
     func post<Request: Encodable, Response: Decodable>(_ path: String, body: Request) async throws -> Response {
-        var request = URLRequest(url: baseURL.appending(path: path))
+        var request = URLRequest(url: baseURLProvider().appending(path: path))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try encoder.encode(body)
@@ -70,7 +79,7 @@ struct APIClient {
     }
 
     func put<Request: Encodable, Response: Decodable>(_ path: String, body: Request) async throws -> Response {
-        var request = URLRequest(url: baseURL.appending(path: path))
+        var request = URLRequest(url: baseURLProvider().appending(path: path))
         request.httpMethod = "PUT"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try encoder.encode(body)

@@ -6,7 +6,7 @@ import Foundation
 final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     static let maxAcceptedHorizontalAccuracy: CLLocationAccuracy = 50
     static let preferredQualityAccuracy: CLLocationAccuracy = 30
-    static let minimumMovementDistance: CLLocationDistance = 7
+    static let minimumMovementDistance: CLLocationDistance = 3
 
     @Published private(set) var authorizationStatus: CLAuthorizationStatus
     @Published private(set) var latestLocation: CLLocation?
@@ -15,33 +15,60 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
     @Published private(set) var isSimulating = false
 
     private let manager: CLLocationManager
+    private var locationUpdateHandler: ((CLLocation) -> Void)?
 
     init(manager: CLLocationManager = CLLocationManager()) {
         self.manager = manager
         self.authorizationStatus = manager.authorizationStatus
-        self.statusText = "Location not started"
+        self.latestLocation = manager.location
+        self.latestAccuracy = manager.location?.horizontalAccuracy
+        self.statusText = manager.location == nil ? "Location not started" : "Location ready"
         super.init()
         self.manager.delegate = self
         self.manager.desiredAccuracy = kCLLocationAccuracyBest
-        self.manager.distanceFilter = 5
+        self.manager.distanceFilter = 1
+        self.manager.activityType = .fitness
+        self.manager.pausesLocationUpdatesAutomatically = false
     }
 
     func requestWhenInUseAuthorization() {
         manager.requestWhenInUseAuthorization()
     }
 
-    func startUpdates() {
+    func requestAlwaysAuthorization() {
+        manager.requestAlwaysAuthorization()
+    }
+
+    func requestCurrentLocation() {
+        guard !isSimulating else { return }
+        switch manager.authorizationStatus {
+        case .authorizedAlways, .authorizedWhenInUse:
+            manager.requestLocation()
+        default:
+            break
+        }
+    }
+
+    func startUpdates(allowsBackground: Bool = false) {
         statusText = "Tracking live"
         guard !isSimulating else {
             statusText = "Admin simulator"
             return
         }
+        manager.allowsBackgroundLocationUpdates = allowsBackground
+        manager.showsBackgroundLocationIndicator = allowsBackground
         manager.startUpdatingLocation()
+    }
+
+    func setLocationUpdateHandler(_ handler: @escaping (CLLocation) -> Void) {
+        locationUpdateHandler = handler
     }
 
     func stopUpdates() {
         statusText = "Tracking paused"
         manager.stopUpdatingLocation()
+        manager.allowsBackgroundLocationUpdates = false
+        manager.showsBackgroundLocationIndicator = false
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
@@ -52,6 +79,9 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
         case .notDetermined: "Location permission needed"
         @unknown default: "Location unavailable"
         }
+        if manager.authorizationStatus == .authorizedAlways || manager.authorizationStatus == .authorizedWhenInUse {
+            requestCurrentLocation()
+        }
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
@@ -60,6 +90,7 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
         latestLocation = location
         latestAccuracy = location.horizontalAccuracy
         statusText = location.horizontalAccuracy <= Self.preferredQualityAccuracy ? "GPS solid" : "GPS settling"
+        locationUpdateHandler?(location)
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: any Error) {
@@ -98,6 +129,9 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
             timestamp: .now
         )
         latestAccuracy = 5
+        if let latestLocation {
+            locationUpdateHandler?(latestLocation)
+        }
     }
 }
 

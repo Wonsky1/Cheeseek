@@ -2,7 +2,6 @@ import SwiftUI
 
 struct ProfileView: View {
     @ObservedObject var viewModel: ProfileViewModel
-    let serverBaseURL: URL
 
     var body: some View {
         NavigationStack {
@@ -28,7 +27,14 @@ struct ProfileView: View {
                 }
 
                 Section("Server") {
-                    infoRow(title: "Base URL", value: serverBaseURL.absoluteString)
+                    TextField("Base URL", text: $viewModel.serverBaseURLText)
+                        .keyboardType(.URL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    Button("Save Server URL") {
+                        viewModel.saveServerBaseURL()
+                    }
+                    .disabled(!viewModel.canSaveServerURL)
                     Text("Nickname is a lightweight POC identity only. Real authentication comes later.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)

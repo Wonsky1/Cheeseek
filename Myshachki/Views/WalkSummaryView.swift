@@ -1,6 +1,29 @@
 import MapKit
 import SwiftUI
 
+struct WalkSummaryContainerView: View {
+    @StateObject private var viewModel: WalkSummaryViewModel
+    let dismissAction: () -> Void
+
+    init(
+        session: WalkSession,
+        backendSyncService: BackendSyncServing,
+        walkSessionStore: WalkSessionStoring,
+        dismissAction: @escaping () -> Void
+    ) {
+        _viewModel = StateObject(wrappedValue: WalkSummaryViewModel(
+            session: session,
+            backendSyncService: backendSyncService,
+            walkSessionStore: walkSessionStore
+        ))
+        self.dismissAction = dismissAction
+    }
+
+    var body: some View {
+        WalkSummaryView(viewModel: viewModel, dismissAction: dismissAction)
+    }
+}
+
 struct WalkSummaryView: View {
     @ObservedObject var viewModel: WalkSummaryViewModel
     let dismissAction: () -> Void

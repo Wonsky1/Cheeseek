@@ -14,13 +14,17 @@ struct RootTabView: View {
             coverageStore: dependencies.coverageStore,
             backendSyncService: dependencies.backendSyncService,
             mockRouteProvider: dependencies.mockRouteProvider,
-            profileService: dependencies.profileService
+            profileService: dependencies.profileService,
+            walkLiveActivityService: dependencies.walkLiveActivityService
         ))
         _activityViewModel = StateObject(wrappedValue: ActivityViewModel(
             walkSessionStore: dependencies.walkSessionStore,
             profileService: dependencies.profileService
         ))
-        _profileViewModel = StateObject(wrappedValue: ProfileViewModel(profileService: dependencies.profileService))
+        _profileViewModel = StateObject(wrappedValue: ProfileViewModel(
+            profileService: dependencies.profileService,
+            serverConfiguration: dependencies.serverConfiguration
+        ))
     }
 
     var body: some View {
@@ -35,7 +39,7 @@ struct RootTabView: View {
                     Label("Activity", systemImage: "figure.walk")
                 }
 
-            ProfileView(viewModel: profileViewModel, serverBaseURL: dependencies.serverConfiguration.baseURL)
+            ProfileView(viewModel: profileViewModel)
                 .tabItem {
                     Label("Profile", systemImage: "person.crop.circle")
                 }
@@ -43,9 +47,6 @@ struct RootTabView: View {
         .task {
             await mapViewModel.onAppear()
             await activityViewModel.refresh()
-        }
-        .onReceive(dependencies.locationManager.$latestLocation) { _ in
-            mapViewModel.refreshLocation()
         }
         .onReceive(dependencies.locationManager.$authorizationStatus) { _ in
             mapViewModel.refreshLocationStatus()

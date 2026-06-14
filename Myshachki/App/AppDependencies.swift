@@ -12,6 +12,7 @@ final class AppDependencies: ObservableObject {
     let profileService: ProfileServing
     let backendSyncService: BackendSyncServing
     let mockRouteProvider: MockRouteProviding
+    let walkLiveActivityService: WalkLiveActivityService
 
     init(
         serverConfiguration: ServerConfiguration,
@@ -22,7 +23,8 @@ final class AppDependencies: ObservableObject {
         profileStore: ProfileStoring,
         profileService: ProfileServing,
         backendSyncService: BackendSyncServing,
-        mockRouteProvider: MockRouteProviding
+        mockRouteProvider: MockRouteProviding,
+        walkLiveActivityService: WalkLiveActivityService
     ) {
         self.serverConfiguration = serverConfiguration
         self.apiClient = apiClient
@@ -33,11 +35,12 @@ final class AppDependencies: ObservableObject {
         self.profileService = profileService
         self.backendSyncService = backendSyncService
         self.mockRouteProvider = mockRouteProvider
+        self.walkLiveActivityService = walkLiveActivityService
     }
 
     static var live: AppDependencies {
         let serverConfiguration = ServerConfiguration()
-        let apiClient = APIClient(baseURL: serverConfiguration.baseURL)
+        let apiClient = APIClient(baseURLProvider: { serverConfiguration.baseURL })
         let profileStore = ProfileStore()
         let profileService = ProfileService(apiClient: apiClient, profileStore: profileStore)
         return AppDependencies(
@@ -49,13 +52,14 @@ final class AppDependencies: ObservableObject {
             profileStore: profileStore,
             profileService: profileService,
             backendSyncService: HTTPBackendSyncService(apiClient: apiClient),
-            mockRouteProvider: MockRouteProvider()
+            mockRouteProvider: MockRouteProvider(),
+            walkLiveActivityService: WalkLiveActivityService()
         )
     }
 
     static var preview: AppDependencies {
         let serverConfiguration = ServerConfiguration(baseURL: URL(string: "https://unconsecrative-lustrelessly-jeanie.ngrok-free.dev")!)
-        let apiClient = APIClient(baseURL: serverConfiguration.baseURL)
+        let apiClient = APIClient(baseURLProvider: { serverConfiguration.baseURL })
         let profileStore = InMemoryProfileStore(
             profile: UserProfile(
                 id: UUID(),
@@ -74,7 +78,8 @@ final class AppDependencies: ObservableObject {
             profileStore: profileStore,
             profileService: profileService,
             backendSyncService: MockBackendSyncService(),
-            mockRouteProvider: MockRouteProvider()
+            mockRouteProvider: MockRouteProvider(),
+            walkLiveActivityService: WalkLiveActivityService()
         )
     }
 }

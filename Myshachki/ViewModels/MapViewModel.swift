@@ -25,9 +25,11 @@ final class MapViewModel: ObservableObject {
     @Published private(set) var mapFeatureGeoJSON = #"{"type":"FeatureCollection","features":[]}"#
     @Published private(set) var activeRouteGeoJSON = #"{"type":"FeatureCollection","features":[]}"#
     @Published private(set) var mapCenterCoordinate: CLLocationCoordinate2D
+    @Published private(set) var userCoordinate: CLLocationCoordinate2D?
     @Published var summarySession: WalkSession?
     @Published private(set) var syncStatusText: String = SyncStatus.localOnly.label
     @Published private(set) var isFinishingWalk = false
+    @Published private(set) var isFollowingUser = true
 
     private let locationManager: LocationManager
     private let walkSessionStore: WalkSessionStoring
@@ -35,10 +37,11 @@ final class MapViewModel: ObservableObject {
     private let backendSyncService: BackendSyncServing
     private let mockRouteProvider: MockRouteProviding
     private let profileService: ProfileServing
+    private let walkLiveActivityService: WalkLiveActivityService
     private var timer: Timer?
     private var currentProfile: UserProfile?
     private var persistedCoverageSideIDs: Set<String> = []
-    private var activeBackendCoverageSideIDs: Set<String> = []
+    private var activeCoverageSideIDs: Set<String> = []
     private var lastAcceptedLocation: CLLocation?
     private let defaultCoordinate = CLLocationCoordinate2D(latitude: 52.2297, longitude: 21.0122)
     private let coverageAreaID = "osm-building-sides-v1"
@@ -51,7 +54,8 @@ final class MapViewModel: ObservableObject {
         coverageStore: CoverageStoring,
         backendSyncService: BackendSyncServing,
         mockRouteProvider: MockRouteProviding,
-        profileService: ProfileServing
+        profileService: ProfileServing,
+        walkLiveActivityService: WalkLiveActivityService
     ) {
         self.locationManager = locationManager
         self.walkSessionStore = walkSessionStore
@@ -59,19 +63,26 @@ final class MapViewModel: ObservableObject {
         self.backendSyncService = backendSyncService
         self.mockRouteProvider = mockRouteProvider
         self.profileService = profileService
+        self.walkLiveActivityService = walkLiveActivityService
         self.mapPerspectiveMode = Self.loadPersistedMapPerspectiveMode()
         self.mapStyleMode = Self.loadPersistedMapStyleMode()
+        let initialCoordinate = locationManager.latestLocation?.coordinate ?? defaultCoordinate
+        self.userCoordinate = locationManager.latestLocation?.coordinate
         self.cameraPosition = .region(
             MKCoordinateRegion(
-                center: defaultCoordinate,
+                center: initialCoordinate,
                 span: MKCoordinateSpan(latitudeDelta: 0.015, longitudeDelta: 0.015)
             )
         )
-        self.mapCenterCoordinate = defaultCoordinate
+        self.mapCenterCoordinate = initialCoordinate
+        self.locationManager.setLocationUpdateHandler { [weak self] location in
+            self?.handleLocationUpdate(location)
+        }
     }
 
     func onAppear() async {
         locationManager.requestWhenInUseAuthorization()
+        locationManager.requestCurrentLocation()
         refreshProfile()
         refreshLocationStatus()
         await loadStoredSessions()
@@ -120,20 +131,9 @@ final class MapViewModel: ObservableObject {
 
     func refreshLocation() {
         if let latestLocation = locationManager.latestLocation {
-            mapCenterCoordinate = latestLocation.coordinate
-            cameraPosition = .region(
-                MKCoordinateRegion(
-                    center: latestLocation.coordinate,
-                    span: MKCoordinateSpan(latitudeDelta: 0.012, longitudeDelta: 0.012)
-                )
-            )
+            handleLocationUpdate(latestLocation)
         }
         refreshLocationStatus()
-        let consumedLocation = consumeLatestLocationIfNeeded()
-        if !consumedLocation {
-            updateExplorationState()
-            refreshMapData()
-        }
     }
 
     func startWalk() {
@@ -154,15 +154,26 @@ final class MapViewModel: ObservableObject {
             permissionMessage = "Allow location access, then tap Start Walk again."
             return
         }
+        if locationManager.authorizationStatus == .authorizedWhenInUse {
+            locationManager.requestAlwaysAuthorization()
+        }
         let session = WalkSession.fresh(userId: currentProfile!.id.uuidString)
         activeSession = session
         walkState = .recording
-        activeBackendCoverageSideIDs = []
+        activeCoverageSideIDs = []
         liveDistance = 0
         elapsedTime = 0
         syncStatusText = SyncStatus.localOnly.label
         lastAcceptedLocation = nil
-        locationManager.startUpdates()
+        isFollowingUser = true
+        if let latestLocation = locationManager.latestLocation {
+            userCoordinate = latestLocation.coordinate
+            setMapCenter(latestLocation.coordinate)
+        } else {
+            locationManager.requestCurrentLocation()
+        }
+        locationManager.startUpdates(allowsBackground: true)
+        walkLiveActivityService.start(startedAt: session.startedAt, distanceMeters: liveDistance, elapsedSeconds: elapsedTime)
         startTimer()
         permissionMessage = "Walk started. Waiting for your first GPS point."
         consumeLatestLocationIfNeeded()
@@ -174,10 +185,12 @@ final class MapViewModel: ObservableObject {
             walkState = .paused
             locationManager.stopUpdates()
             stopTimer()
+            walkLiveActivityService.update(distanceMeters: liveDistance, elapsedSeconds: elapsedTime, isPaused: true)
         case .paused:
             walkState = .recording
-            locationManager.startUpdates()
+            locationManager.startUpdates(allowsBackground: true)
             startTimer()
+            walkLiveActivityService.update(distanceMeters: liveDistance, elapsedSeconds: elapsedTime, isPaused: false)
         default:
             break
         }
@@ -190,6 +203,7 @@ final class MapViewModel: ObservableObject {
         defer { isFinishingWalk = false }
         locationManager.stopUpdates()
         stopTimer()
+        walkLiveActivityService.end(distanceMeters: liveDistance, elapsedSeconds: elapsedTime)
         session.endedAt = .now
         session.durationSeconds = elapsedTime
         session.distanceMeters = liveDistance
@@ -202,7 +216,7 @@ final class MapViewModel: ObservableObject {
             session.syncStatus = .failed
         }
         activeSession = nil
-        activeBackendCoverageSideIDs = []
+        activeCoverageSideIDs = []
         walkState = .finished(session)
         summarySession = session
         syncStatusText = session.syncStatus.label
@@ -223,6 +237,10 @@ final class MapViewModel: ObservableObject {
 
     var activeRouteCoordinates: [CLLocationCoordinate2D] {
         activeSession?.points.map(\.coordinate) ?? []
+    }
+
+    var showsUserLocation: Bool {
+        userCoordinate != nil
     }
 
     var locationReady: Bool {
@@ -281,6 +299,20 @@ final class MapViewModel: ObservableObject {
     func toggleMapStyleMode() {
         mapStyleMode = mapStyleMode == .light ? .dark : .light
         UserDefaults.standard.set(mapStyleMode.rawValue, forKey: Self.mapStyleModeDefaultsKey)
+    }
+
+    func recenterOnUser() {
+        isFollowingUser = true
+        if let latestLocation = locationManager.latestLocation {
+            userCoordinate = latestLocation.coordinate
+            setMapCenter(latestLocation.coordinate)
+        } else {
+            locationManager.requestCurrentLocation()
+        }
+    }
+
+    func userDidMoveMap() {
+        isFollowingUser = false
     }
 
     var adminSimulationReady: Bool {
@@ -369,7 +401,19 @@ final class MapViewModel: ObservableObject {
             locationManager.enableSimulation(at: defaultCoordinate)
         }
         locationManager.stepSimulation(latitudeDelta: latitudeDelta, longitudeDelta: longitudeDelta)
-        refreshLocation()
+    }
+
+    private func handleLocationUpdate(_ location: CLLocation) {
+        userCoordinate = location.coordinate
+        if isFollowingUser {
+            setMapCenter(location.coordinate)
+        }
+        refreshLocationStatus()
+        let consumedLocation = consumeLatestLocationIfNeeded(location)
+        if !consumedLocation {
+            updateExplorationState()
+            refreshMapData()
+        }
     }
 
     private func startTimer() {
@@ -379,6 +423,11 @@ final class MapViewModel: ObservableObject {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.elapsedTime = Date().timeIntervalSince(self.activeSession?.startedAt ?? .now)
+                self.walkLiveActivityService.update(
+                    distanceMeters: self.liveDistance,
+                    elapsedSeconds: self.elapsedTime,
+                    isPaused: false
+                )
             }
         }
     }
@@ -444,8 +493,9 @@ final class MapViewModel: ObservableObject {
     }
 
     @discardableResult
-    private func consumeLatestLocationIfNeeded() -> Bool {
-        guard walkState == .recording, var session = activeSession, let location = locationManager.latestLocation else { return false }
+    private func consumeLatestLocationIfNeeded(_ location: CLLocation? = nil) -> Bool {
+        guard walkState == .recording, var session = activeSession else { return false }
+        guard let location = location ?? locationManager.latestLocation else { return false }
         guard shouldAccept(location: location) else { return false }
 
         let trackPoint = TrackPoint.from(location: location)
@@ -453,9 +503,11 @@ final class MapViewModel: ObservableObject {
         if let previousLocation = lastAcceptedLocation {
             liveDistance += location.distance(from: previousLocation)
         }
+        elapsedTime = Date().timeIntervalSince(session.startedAt)
         lastAcceptedLocation = location
         syncStatusText = SyncStatus.localOnly.label
         activeSession = session
+        walkLiveActivityService.update(distanceMeters: liveDistance, elapsedSeconds: elapsedTime, isPaused: false)
         updateExplorationState()
         refreshMapData()
         return true
@@ -477,9 +529,9 @@ final class MapViewModel: ObservableObject {
     private func updateExplorationState() {
         let localExploredIDs = discoveredBuildingSideIDs(from: storedSessions.flatMap(\.points))
         let exploredIDs = normalizedCoverageIDs(persistedCoverageSideIDs).union(localExploredIDs)
-        let activeIDs = activeBackendCoverageSideIDs.isEmpty
+        let activeIDs = activeCoverageSideIDs.isEmpty
             ? discoveredBuildingSideIDs(from: activeSession?.points ?? [])
-            : activeBackendCoverageSideIDs
+            : activeCoverageSideIDs
         let newActiveIDs = activeIDs.subtracting(exploredIDs)
         let activeBuildingIDs = CoverageBuildingCodec.buildingIDs(from: newActiveIDs)
         let discoveredBuildingCount = buildingIDs(from: exploredIDs.union(newActiveIDs)).count
@@ -498,14 +550,14 @@ final class MapViewModel: ObservableObject {
 
     private func refreshBackendCoverageCandidates() async {
         guard let points = activeSession?.points, points.count > 1 else {
-            activeBackendCoverageSideIDs = []
+            activeCoverageSideIDs = []
             return
         }
         do {
-            activeBackendCoverageSideIDs = try await backendSyncService.fetchMapCoverageCandidates(points: points)
+            activeCoverageSideIDs = try await backendSyncService.fetchMapCoverageCandidates(points: points)
             updateExplorationState()
         } catch {
-            activeBackendCoverageSideIDs = []
+            activeCoverageSideIDs = []
         }
     }
 
@@ -518,7 +570,10 @@ final class MapViewModel: ObservableObject {
             ?? activeSession?.points.last?.coordinate
             ?? storedSessions.first?.points.last?.coordinate
             ?? defaultCoordinate
-        mapCenterCoordinate = center
+        userCoordinate = locationManager.latestLocation?.coordinate
+        if isFollowingUser || userCoordinate == nil {
+            setMapCenter(center)
+        }
         activeRouteGeoJSON = routeFeatureCollection(
             storedSessions: storedSessions,
             activePoints: activeSession?.points ?? []
@@ -528,9 +583,9 @@ final class MapViewModel: ObservableObject {
 
     private func persistCoverage(from session: WalkSession) async {
         guard let profile = currentProfile else { return }
-        let sessionIDs = activeBackendCoverageSideIDs.isEmpty
+        let sessionIDs = activeCoverageSideIDs.isEmpty
             ? discoveredBuildingSideIDs(from: session.points)
-            : activeBackendCoverageSideIDs
+            : activeCoverageSideIDs
         guard !sessionIDs.isEmpty else { return }
 
         var mergedIDs = persistedCoverageSideIDs
@@ -657,6 +712,16 @@ final class MapViewModel: ObservableObject {
         MKCoordinateRegion(
             center: coordinate,
             span: MKCoordinateSpan(latitudeDelta: boardLatSpan, longitudeDelta: boardLonSpan)
+        )
+    }
+
+    private func setMapCenter(_ coordinate: CLLocationCoordinate2D) {
+        mapCenterCoordinate = coordinate
+        cameraPosition = .region(
+            MKCoordinateRegion(
+                center: coordinate,
+                span: MKCoordinateSpan(latitudeDelta: 0.012, longitudeDelta: 0.012)
+            )
         )
     }
 }

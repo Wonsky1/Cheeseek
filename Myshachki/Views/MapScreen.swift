@@ -11,14 +11,16 @@ struct MapScreen: View {
                 buildingGeoJSON: viewModel.mapFeatureGeoJSON,
                 routeGeoJSON: viewModel.activeRouteGeoJSON,
                 storageKey: viewModel.mapStorageKey,
+                userCoordinate: viewModel.userCoordinate,
                 perspectiveMode: viewModel.mapPerspectiveMode,
-                styleMode: viewModel.mapStyleMode
+                styleMode: viewModel.mapStyleMode,
+                showsUserLocation: viewModel.showsUserLocation,
+                onUserInteraction: { viewModel.userDidMoveMap() }
             )
             .ignoresSafeArea()
 
             VStack(spacing: 14) {
                 HStack {
-                    MapOverlayLegend()
                     Spacer()
                     Button {
                         viewModel.toggleMapPerspectiveMode()
@@ -46,6 +48,16 @@ struct MapScreen: View {
                 }
             }
             .padding(.horizontal, 16)
+
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    recenterButton
+                }
+                .padding(.trailing, 16)
+                .padding(.bottom, recenterBottomPadding)
+            }
 
             VStack {
                 Spacer()
@@ -124,14 +136,36 @@ struct MapScreen: View {
             }
         }
         .sheet(item: $viewModel.summarySession) { session in
-            WalkSummaryView(
-                viewModel: WalkSummaryViewModel(
-                    session: session,
-                    backendSyncService: backendSyncService,
-                    walkSessionStore: viewModel.summaryWalkSessionStore
-                ),
+            WalkSummaryContainerView(
+                session: session,
+                backendSyncService: backendSyncService,
+                walkSessionStore: viewModel.summaryWalkSessionStore,
                 dismissAction: { viewModel.dismissSummary() }
             )
+        }
+    }
+
+    private var recenterButton: some View {
+        Button {
+            viewModel.recenterOnUser()
+        } label: {
+            Label("Recenter", systemImage: viewModel.isFollowingUser ? "location.fill" : "location")
+                .font(.body.weight(.semibold))
+                .labelStyle(.iconOnly)
+                .frame(width: 46, height: 46)
+                .background(.thinMaterial, in: Circle())
+                .shadow(color: .black.opacity(0.16), radius: 10, x: 0, y: 5)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Recenter on me")
+    }
+
+    private var recenterBottomPadding: CGFloat {
+        switch viewModel.walkState {
+        case .recording, .paused:
+            viewModel.isAdminMode ? 330 : 230
+        default:
+            viewModel.isAdminMode ? 370 : 230
         }
     }
 }
