@@ -16,6 +16,7 @@ struct MapLibreMapView: UIViewRepresentable {
     var showsUserLocation = true
     var smoothUserLocation = true
     var fitsRouteBounds = false
+    var fitToken = 0
     var onUserInteraction: (() -> Void)?
 
     func makeUIView(context: Context) -> WKWebView {
@@ -35,7 +36,7 @@ struct MapLibreMapView: UIViewRepresentable {
 
     func updateUIView(_ webView: WKWebView, context: Context) {
         let script = """
-        window.myshachkiSetData(\(buildingGeoJSON), \(routeGeoJSON), {\(Self.centerJavaScript(center))}, "\(Self.escapedJavaScriptString(storageKey))", { showsUserLocation: \(showsUserLocation), smoothUserLocation: \(smoothUserLocation), fitsRouteBounds: \(fitsRouteBounds), perspectiveMode: "\(perspectiveMode.rawValue)", styleMode: "\(styleMode.rawValue)", userLocation: \(Self.optionalCoordinateJavaScript(userCoordinate)) });
+        window.myshachkiSetData(\(buildingGeoJSON), \(routeGeoJSON), {\(Self.centerJavaScript(center))}, "\(Self.escapedJavaScriptString(storageKey))", { showsUserLocation: \(showsUserLocation), smoothUserLocation: \(smoothUserLocation), fitsRouteBounds: \(fitsRouteBounds), fitToken: \(fitToken), perspectiveMode: "\(perspectiveMode.rawValue)", styleMode: "\(styleMode.rawValue)", userLocation: \(Self.optionalCoordinateJavaScript(userCoordinate)) });
         """
         context.coordinator.onUserInteraction = onUserInteraction
         context.coordinator.enqueue(script)
@@ -517,6 +518,7 @@ struct MapLibreMapView: UIViewRepresentable {
           applyCachedBuildingOverlay();
           if (pending.options.fitsRouteBounds) {
             fitRouteBounds();
+            scheduleRouteBoundsRefit();
           } else {
             applyCamera();
           }
@@ -1013,6 +1015,10 @@ struct MapLibreMapView: UIViewRepresentable {
         }
 
         function fitRouteBounds() {
+          const canvas = map.getCanvas();
+          if (!canvas || canvas.clientWidth < 2 || canvas.clientHeight < 2) {
+            return;
+          }
           const coordinates = currentRouteFeatures().flatMap(feature => feature.geometry.coordinates);
           if (coordinates.length < 2) {
             map.easeTo({ center: [pending.center.lon, pending.center.lat], zoom: 15.8, duration: 220 });
@@ -1025,6 +1031,16 @@ struct MapLibreMapView: UIViewRepresentable {
             padding: { top: 26, bottom: 26, left: 26, right: 26 },
             maxZoom: 17.2,
             duration: 280
+          });
+        }
+
+        function scheduleRouteBoundsRefit() {
+          [120, 420, 900].forEach(delay => {
+            setTimeout(() => {
+              if (!pending.options.fitsRouteBounds) return;
+              map.resize();
+              fitRouteBounds();
+            }, delay);
           });
         }
 
@@ -1202,6 +1218,11 @@ struct MapLibreMapView: UIViewRepresentable {
           sourceUpdateState.overlaySignature = '';
           applyMapPresentation();
           applyData();
+        });
+        map.on('resize', () => {
+          if (pending.options.fitsRouteBounds) {
+            fitRouteBounds();
+          }
         });
         map.on('sourcedata', event => {
           if (event.sourceId !== 'openmaptiles' || currentPerspectiveMode() !== 'threeD') return;
