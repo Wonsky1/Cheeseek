@@ -5,6 +5,7 @@ import WebKit
 struct MapLibreMapView: UIViewRepresentable {
     private static let readyMessageHandler = "myshachkiReady"
     private static let mapInteractionMessageHandler = "myshachkiMapInteraction"
+    private static let coverageMessageHandler = "myshachkiCoverage"
 
     let center: CLLocationCoordinate2D
     let buildingGeoJSON: String
@@ -17,6 +18,8 @@ struct MapLibreMapView: UIViewRepresentable {
     var smoothUserLocation = true
     var fitsRouteBounds = false
     var fitToken = 0
+    var persistsCoverage = true
+    var onCurrentCoverageChange: ((String) -> Void)?
     var onUserInteraction: (() -> Void)?
 
     func makeUIView(context: Context) -> WKWebView {
@@ -25,6 +28,7 @@ struct MapLibreMapView: UIViewRepresentable {
         configuration.userContentController.addUserScript(Self.bridgeBootstrapScript)
         configuration.userContentController.add(context.coordinator, name: Self.readyMessageHandler)
         configuration.userContentController.add(context.coordinator, name: Self.mapInteractionMessageHandler)
+        configuration.userContentController.add(context.coordinator, name: Self.coverageMessageHandler)
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.isOpaque = false
         webView.scrollView.isScrollEnabled = false
@@ -36,8 +40,9 @@ struct MapLibreMapView: UIViewRepresentable {
 
     func updateUIView(_ webView: WKWebView, context: Context) {
         let script = """
-        window.myshachkiSetData(\(buildingGeoJSON), \(routeGeoJSON), {\(Self.centerJavaScript(center))}, "\(Self.escapedJavaScriptString(storageKey))", { showsUserLocation: \(showsUserLocation), smoothUserLocation: \(smoothUserLocation), fitsRouteBounds: \(fitsRouteBounds), fitToken: \(fitToken), perspectiveMode: "\(perspectiveMode.rawValue)", styleMode: "\(styleMode.rawValue)", userLocation: \(Self.optionalCoordinateJavaScript(userCoordinate)) });
+        window.myshachkiSetData(\(buildingGeoJSON), \(routeGeoJSON), {\(Self.centerJavaScript(center))}, "\(Self.escapedJavaScriptString(storageKey))", { showsUserLocation: \(showsUserLocation), smoothUserLocation: \(smoothUserLocation), fitsRouteBounds: \(fitsRouteBounds), fitToken: \(fitToken), persistsCoverage: \(persistsCoverage), perspectiveMode: "\(perspectiveMode.rawValue)", styleMode: "\(styleMode.rawValue)", userLocation: \(Self.optionalCoordinateJavaScript(userCoordinate)) });
         """
+        context.coordinator.onCurrentCoverageChange = onCurrentCoverageChange
         context.coordinator.onUserInteraction = onUserInteraction
         context.coordinator.enqueue(script)
     }
@@ -49,6 +54,7 @@ struct MapLibreMapView: UIViewRepresentable {
     static func dismantleUIView(_ uiView: WKWebView, coordinator: Coordinator) {
         uiView.configuration.userContentController.removeScriptMessageHandler(forName: readyMessageHandler)
         uiView.configuration.userContentController.removeScriptMessageHandler(forName: mapInteractionMessageHandler)
+        uiView.configuration.userContentController.removeScriptMessageHandler(forName: coverageMessageHandler)
     }
 
     private static func centerJavaScript(_ center: CLLocationCoordinate2D) -> String {
@@ -86,11 +92,13 @@ struct MapLibreMapView: UIViewRepresentable {
       <script src="https://unpkg.com/maplibre-gl@5.9.0/dist/maplibre-gl.js"></script>
       <style>
         html, body, #map { width: 100%; height: 100%; margin: 0; padding: 0; background: #14161f; }
+        #summaryOverlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
         .maplibregl-ctrl-bottom-left, .maplibregl-ctrl-bottom-right { display: none; }
       </style>
     </head>
     <body>
       <div id="map"></div>
+      <svg id="summaryOverlay" aria-hidden="true"></svg>
       <script>
         const empty = { type: 'FeatureCollection', features: [] };
         const fallbackStyle = {
@@ -114,6 +122,7 @@ struct MapLibreMapView: UIViewRepresentable {
           pitch: 0,
           attributionControl: false
         });
+        const summaryOverlay = document.getElementById('summaryOverlay');
         function notifyNativeMapInteraction() {
           window.webkit.messageHandlers.\(mapInteractionMessageHandler).postMessage('user');
         }
@@ -128,6 +137,7 @@ struct MapLibreMapView: UIViewRepresentable {
         }
 
         function currentPitch() {
+          if (pending.options.fitsRouteBounds) return 0;
           return currentPerspectiveMode() === 'threeD' ? 58 : 0;
         }
 
@@ -244,13 +254,27 @@ struct MapLibreMapView: UIViewRepresentable {
           if (map.getLayer('myshachki-route-line')) {
             map.setPaintProperty('myshachki-route-line', 'line-color', [
               'match', ['get', 'status'],
+              'summary', routeLineColor(),
               'explored', exploredFillColor(),
               routeLineColor()
+            ]);
+            map.setPaintProperty('myshachki-route-line', 'line-opacity', [
+              'match', ['get', 'status'],
+              'summary', 0.96,
+              'explored', 0.34,
+              0.86
+            ]);
+            map.setPaintProperty('myshachki-route-line', 'line-width', [
+              'match', ['get', 'status'],
+              'summary', 5.2,
+              'explored', 2.2,
+              3.2
             ]);
           }
         }
 
         let pending = {
+          buildings: empty,
           route: empty,
           center: { lat: 52.2297, lon: 21.0122 },
           userLocation: null,
@@ -277,6 +301,7 @@ struct MapLibreMapView: UIViewRepresentable {
         let coverAnimationState = { frame: null };
         let userAnimationState = { frame: null, coordinate: null, lastTargetAt: 0 };
         let sourceUpdateState = { routeSignature: '', overlaySignature: '', availableOverlaySignature: '', cameraSignature: '', lastCameraAt: 0 };
+        let currentCoveragePostState = { signature: '' };
         let storagePrefix = 'myshachki.coveredBuildings.v2.';
         let maxPersistedFeatures = 5000;
         let sourceLayerName = 'building';
@@ -431,18 +456,21 @@ struct MapLibreMapView: UIViewRepresentable {
           paint: {
             'line-color': [
               'match', ['get', 'status'],
+              'summary', '#5ab3d6',
               'explored', '#f2c94c',
               '#5ab3d6'
             ],
             'line-opacity': [
-              'case',
-              ['==', ['get', 'status'], 'explored'], 0.26,
+              'match', ['get', 'status'],
+              'summary', 0.96,
+              'explored', 0.34,
               0.86
             ],
             'line-width': [
-              'case',
-              ['==', ['get', 'status'], 'explored'], 1.8,
-              2.8
+              'match', ['get', 'status'],
+              'summary', 5.2,
+              'explored', 2.2,
+              3.2
             ]
           },
           layout: { 'line-cap': 'round', 'line-join': 'round' }
@@ -506,22 +534,32 @@ struct MapLibreMapView: UIViewRepresentable {
             map.addLayer(userLocationHaloLayer);
             map.addLayer(userLocationLayer);
           }
+          if (map.getLayer('myshachki-route-line')) {
+            try {
+              map.moveLayer('myshachki-route-line');
+            } catch (error) {
+              reportOnce('route-layer-order', error);
+            }
+          }
         }
 
         function applyData() {
           if (!map.loaded()) return;
           ensureLayers();
           applyMapPresentation();
-          applyRouteSourceData();
+          const routeChanged = applyRouteSourceData();
           updateUserLocationSource();
           loadPersistedFeaturesIfNeeded();
+          applyPreloadedBuildingFeatures();
           applyCachedBuildingOverlay();
           if (pending.options.fitsRouteBounds) {
-            fitRouteBounds();
+            fitRouteBounds(routeChanged);
+            scheduleSummaryRefreshes(routeChanged);
             scheduleRouteBoundsRefit();
           } else {
             applyCamera();
           }
+          renderSummaryOverlay();
           idleRecomputeNeeded.value = true;
           scheduleBuildingRecompute();
         }
@@ -546,11 +584,12 @@ struct MapLibreMapView: UIViewRepresentable {
         }
 
         function applyRouteSourceData() {
-          if (!map.getSource('myshachki-route')) return;
+          if (!map.getSource('myshachki-route')) return false;
           const signature = routeSignature(pending.route || empty);
-          if (sourceUpdateState.routeSignature === signature) return;
+          if (sourceUpdateState.routeSignature === signature) return false;
           sourceUpdateState.routeSignature = signature;
           map.getSource('myshachki-route').setData(pending.route || empty);
+          return true;
         }
 
         function routeSignature(route) {
@@ -565,6 +604,15 @@ struct MapLibreMapView: UIViewRepresentable {
         }
 
         window.myshachkiSetData = function(buildings, route, center, storageKey, options) {
+          pending.options = options || pending.options;
+          const nextRoute = route || empty;
+          if (nextRoute !== pending.route) {
+            exploredReplayAttempts.value = 0;
+          }
+          pending.buildings = buildings || empty;
+          pending.route = nextRoute;
+          pending.center = center || pending.center;
+          pending.userLocation = pending.options.userLocation || null;
           const nextStorageKey = storageKey || 'anonymous';
           if (nextStorageKey !== pending.storageKey) {
             pending.storageKey = nextStorageKey;
@@ -580,13 +628,6 @@ struct MapLibreMapView: UIViewRepresentable {
             exploredReplayAttempts.value = 0;
             loadPersistedFeaturesIfNeeded();
           }
-          if (route !== pending.route) {
-            exploredReplayAttempts.value = 0;
-          }
-          pending.route = route || empty;
-          pending.center = center || pending.center;
-          pending.options = options || pending.options;
-          pending.userLocation = pending.options.userLocation || null;
           applyData();
         };
         for (const queuedArguments of window.myshachkiNativeQueue || []) {
@@ -602,6 +643,21 @@ struct MapLibreMapView: UIViewRepresentable {
             recomputeQueued.value = false;
             recomputeBuildingOverlay();
           });
+        }
+
+        function scheduleSummaryRefreshes(routeChanged) {
+          if (!pending.options.fitsRouteBounds) return;
+          const delays = routeChanged ? [120, 420, 900] : [360];
+          for (const delay of delays) {
+            setTimeout(() => {
+              if (!pending.options.fitsRouteBounds) return;
+              fitRouteBounds(false);
+              idleRecomputeNeeded.value = true;
+              sourceUpdateState.availableOverlaySignature = '';
+              renderSummaryOverlay();
+              scheduleBuildingRecompute();
+            }, delay);
+          }
         }
 
         function recomputeBuildingOverlay() {
@@ -635,7 +691,8 @@ struct MapLibreMapView: UIViewRepresentable {
             processedActiveSegments.clear();
           }
           for (const routeFeature of routeFeatures) {
-            const status = routeFeature.properties && routeFeature.properties.status === 'explored' ? 'explored' : 'active';
+            const rawStatus = routeFeature.properties && routeFeature.properties.status ? routeFeature.properties.status : '';
+            const status = rawStatus === 'explored' ? 'explored' : 'active';
             const coordinates = routeFeature.geometry.coordinates || [];
             if (coordinates.length < 2) continue;
 
@@ -644,6 +701,10 @@ struct MapLibreMapView: UIViewRepresentable {
               const result = processRouteCoordinates(coordinates, status, newlyCovered);
               persistedChanged = persistedChanged || result.persistedChanged;
               queryCount += result.queryCount;
+              continue;
+            }
+
+            if (rawStatus === 'summary') {
               continue;
             }
 
@@ -663,12 +724,121 @@ struct MapLibreMapView: UIViewRepresentable {
           }
           applyCachedBuildingOverlay();
           applyAvailableBuildingOverlay();
+          renderSummaryOverlay();
           reportPerf(startedAt, queryCount);
         }
 
-        function processRouteCoordinates(coordinates, status, newlyCovered) {
+        function renderSummaryOverlay() {
+          if (!summaryOverlay) return;
+          if (!pending.options.fitsRouteBounds) {
+            summaryOverlay.replaceChildren();
+            summaryOverlay.style.display = 'none';
+            return;
+          }
+          summaryOverlay.style.display = 'block';
+          const canvas = map.getCanvas();
+          summaryOverlay.setAttribute('viewBox', `0 0 ${canvas.clientWidth} ${canvas.clientHeight}`);
+          summaryOverlay.replaceChildren();
+
+          const buildingFeatures = summaryBuildingFeatures();
+          for (const feature of buildingFeatures) {
+            appendSummaryBuilding(feature);
+          }
+
+          for (const routeFeature of currentRouteFeatures()) {
+            appendSummaryRoute(routeFeature);
+          }
+        }
+
+        function summaryBuildingFeatures() {
+          const merged = new Map();
+          const preloaded = pending.buildings && pending.buildings.features ? pending.buildings.features : [];
+          for (const feature of preloaded) {
+            if (feature && feature.id && feature.geometry) merged.set(String(feature.id), feature);
+          }
+          for (const [key, feature] of persistedBuildingFeatures) merged.set(key, feature);
+          for (const [key, feature] of activeBuildingFeatures) merged.set(key, feature);
+          return Array.from(merged.values()).slice(-240);
+        }
+
+        function appendSummaryBuilding(feature) {
+          const polygons = feature.geometry.type === 'Polygon'
+            ? [feature.geometry.coordinates]
+            : feature.geometry.type === 'MultiPolygon'
+              ? feature.geometry.coordinates
+              : [];
+          const status = feature.properties && feature.properties.status === 'explored' ? 'explored' : 'active';
+          for (const coordinates of polygons) {
+            const ring = coordinates[0] || [];
+            const points = ring.map(coordinate => {
+              const point = map.project(coordinate);
+              return `${point.x.toFixed(1)},${point.y.toFixed(1)}`;
+            }).join(' ');
+            if (!points) continue;
+            const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+            polygon.setAttribute('points', points);
+            polygon.setAttribute('fill', status === 'explored' ? exploredFillColor() : activeFillColor());
+            polygon.setAttribute('fill-opacity', status === 'explored' ? '0.72' : '0.78');
+            polygon.setAttribute('stroke', status === 'explored' ? exploredOutlineColor() : activeOutlineColor());
+            polygon.setAttribute('stroke-opacity', '0.9');
+            polygon.setAttribute('stroke-width', '1.2');
+            summaryOverlay.appendChild(polygon);
+          }
+        }
+
+        function appendSummaryRoute(routeFeature) {
+          const coordinates = routeFeature.geometry && routeFeature.geometry.coordinates ? routeFeature.geometry.coordinates : [];
+          if (coordinates.length < 2) return;
+          const points = coordinates.map(coordinate => {
+            const point = map.project(coordinate);
+            return `${point.x.toFixed(1)},${point.y.toFixed(1)}`;
+          }).join(' ');
+          const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+          polyline.setAttribute('points', points);
+          polyline.setAttribute('fill', 'none');
+          polyline.setAttribute('stroke', routeLineColor());
+          polyline.setAttribute('stroke-opacity', '0.98');
+          polyline.setAttribute('stroke-width', '5.2');
+          polyline.setAttribute('stroke-linecap', 'round');
+          polyline.setAttribute('stroke-linejoin', 'round');
+          summaryOverlay.appendChild(polyline);
+        }
+
+        function applyPreloadedBuildingFeatures() {
+          const features = pending.buildings && pending.buildings.features ? pending.buildings.features : [];
+          if (features.length === 0) return;
+          for (const feature of features) {
+            if (!feature || !feature.id || !feature.geometry) continue;
+            const status = feature.properties && feature.properties.status === 'explored' ? 'explored' : 'active';
+            feature.properties = Object.assign(
+              { height: 20, minHeight: 0 },
+              feature.properties || {},
+              { status, isFullyCovered: true }
+            );
+            const key = String(feature.id);
+            if (status === 'explored') {
+              persistedBuildingFeatures.set(key, feature);
+            } else {
+              activeBuildingFeatures.set(key, feature);
+              currentWalkBuildingKeys.add(key);
+              if (!persistedBuildingFeatures.has(key)
+                  && !(pending.options && pending.options.persistsCoverage === false)
+                  && !(pending.options && pending.options.fitsRouteBounds)) {
+                persistedBuildingFeatures.set(key, Object.assign({}, feature, {
+                  properties: Object.assign({}, feature.properties, { status: 'explored' })
+                }));
+              }
+            }
+          }
+          sourceUpdateState.overlaySignature = '';
+        }
+
+        function processRouteCoordinates(coordinates, status, newlyCovered, options = {}) {
           var persistedChanged = false;
           var queryCount = 0;
+          const shouldPersistNewCoverage = options.persistNewCoverage !== false
+            && !(pending.options && pending.options.persistsCoverage === false);
+          const activeOverridesPersisted = options.activeOverridesPersisted === true;
           const samples = routeSamples(coordinates);
           for (const sample of samples) {
             const queried = queryRenderedBuildings(sample.x, sample.y, buildingQueryRadiusPixels);
@@ -681,7 +851,10 @@ struct MapLibreMapView: UIViewRepresentable {
                 if (!polygonTouchesQueryBox(part.coordinates, sample.x, sample.y, buildingQueryRadiusPixels)) continue;
                 const key = `${baseKey}:part:${part.key}`;
                 if (!key) continue;
-                if (status === 'active' && persistedBuildingFeatures.has(key) && !currentWalkBuildingKeys.has(key)) {
+                if (status === 'active'
+                    && persistedBuildingFeatures.has(key)
+                    && !currentWalkBuildingKeys.has(key)
+                    && !activeOverridesPersisted) {
                   activeBuildingFeatures.delete(key);
                   continue;
                 }
@@ -690,12 +863,16 @@ struct MapLibreMapView: UIViewRepresentable {
                   activeBuildingFeatures.set(key, candidate);
                 }
                 if (!persistedBuildingFeatures.has(key)) {
-                  persistedBuildingFeatures.set(key, overlayFeature(part.coordinates, key, 'explored', feature));
                   if (status === 'active') {
                     currentWalkBuildingKeys.add(key);
                   }
-                  newlyCovered.push(candidate);
-                  persistedChanged = true;
+                  if (shouldPersistNewCoverage) {
+                    persistedBuildingFeatures.set(key, overlayFeature(part.coordinates, key, 'explored', feature));
+                    newlyCovered.push(candidate);
+                    persistedChanged = true;
+                  }
+                } else if (status === 'active' && activeOverridesPersisted) {
+                  currentWalkBuildingKeys.add(key);
                 }
               }
             }
@@ -746,12 +923,27 @@ struct MapLibreMapView: UIViewRepresentable {
             const props = feature.properties || {};
             return `${feature.id}:${props.status || ''}:${props.height || ''}:${props.minHeight || ''}`;
           }).join('|');
+          postCurrentCoverageIfNeeded(features, signature);
           if (sourceUpdateState.overlaySignature === signature) return;
           sourceUpdateState.overlaySignature = signature;
           map.getSource('myshachki-buildings').setData({
             type: 'FeatureCollection',
             features
           });
+        }
+
+        function postCurrentCoverageIfNeeded(features, signature) {
+          if (pending.options && pending.options.fitsRouteBounds) return;
+          if (currentCoveragePostState.signature === signature) return;
+          currentCoveragePostState.signature = signature;
+          try {
+            window.webkit.messageHandlers.\(coverageMessageHandler).postMessage(JSON.stringify({
+              type: 'FeatureCollection',
+              features
+            }));
+          } catch (error) {
+            reportOnce('post-current-coverage', error);
+          }
         }
 
         function applyAvailableBuildingOverlay() {
@@ -838,6 +1030,12 @@ struct MapLibreMapView: UIViewRepresentable {
         }
 
         function loadPersistedFeaturesIfNeeded() {
+          if (pending.options && pending.options.persistsCoverage === false) {
+            const hasPreloadedBuildings = pending.buildings
+              && pending.buildings.features
+              && pending.buildings.features.length > 0;
+            if (!pending.options.fitsRouteBounds || hasPreloadedBuildings) return;
+          }
           if (persistedBuildingFeatures.size > 0) return;
           const stored = localStorage.getItem(storagePrefix + pending.storageKey);
           if (!stored) return;
@@ -869,6 +1067,7 @@ struct MapLibreMapView: UIViewRepresentable {
         }
 
         function schedulePersistedSave() {
+          if (pending.options && pending.options.persistsCoverage === false) return;
           if (persistedSaveState.timer !== null) {
             clearTimeout(persistedSaveState.timer);
           }
@@ -1014,7 +1213,7 @@ struct MapLibreMapView: UIViewRepresentable {
           tick();
         }
 
-        function fitRouteBounds() {
+        function fitRouteBounds(routeChanged = false) {
           const canvas = map.getCanvas();
           if (!canvas || canvas.clientWidth < 2 || canvas.clientHeight < 2) {
             return;
@@ -1027,11 +1226,18 @@ struct MapLibreMapView: UIViewRepresentable {
           const bounds = coordinates.reduce((currentBounds, coordinate) => {
             return currentBounds.extend(coordinate);
           }, new maplibregl.LngLatBounds(coordinates[0], coordinates[0]));
-          map.fitBounds(bounds, {
-            padding: { top: 26, bottom: 26, left: 26, right: 26 },
-            maxZoom: 17.2,
-            duration: 280
+          const applyFit = () => map.fitBounds(bounds, {
+            padding: { top: 42, bottom: 42, left: 42, right: 42 },
+            maxZoom: 18,
+            pitch: 0,
+            bearing: 0,
+            duration: routeChanged ? 0 : 220
           });
+          if (routeChanged) {
+            requestAnimationFrame(applyFit);
+          } else {
+            applyFit();
+          }
         }
 
         function scheduleRouteBoundsRefit() {
@@ -1039,7 +1245,7 @@ struct MapLibreMapView: UIViewRepresentable {
             setTimeout(() => {
               if (!pending.options.fitsRouteBounds) return;
               map.resize();
-              fitRouteBounds();
+              fitRouteBounds(false);
             }, delay);
           });
         }
@@ -1211,6 +1417,7 @@ struct MapLibreMapView: UIViewRepresentable {
         map.on('load', () => {
           applyMapPresentation();
           applyData();
+          renderSummaryOverlay();
         });
         map.on('styledata', () => {
           if (!map.isStyleLoaded()) return;
@@ -1218,6 +1425,13 @@ struct MapLibreMapView: UIViewRepresentable {
           sourceUpdateState.overlaySignature = '';
           applyMapPresentation();
           applyData();
+          renderSummaryOverlay();
+        });
+        map.on('move', () => {
+          renderSummaryOverlay();
+        });
+        map.on('zoom', () => {
+          renderSummaryOverlay();
         });
         map.on('resize', () => {
           if (pending.options.fitsRouteBounds) {
@@ -1241,6 +1455,7 @@ struct MapLibreMapView: UIViewRepresentable {
           if (!idleRecomputeNeeded.value && !shouldRetryExploredReplay) return;
           idleRecomputeNeeded.value = false;
           scheduleBuildingRecompute();
+          renderSummaryOverlay();
         });
       </script>
     </body>
@@ -1251,6 +1466,7 @@ struct MapLibreMapView: UIViewRepresentable {
         weak var webView: WKWebView?
         var pendingScript: String?
         var onUserInteraction: (() -> Void)?
+        var onCurrentCoverageChange: ((String) -> Void)?
         private var lastEvaluatedScript: String?
         private var isJavaScriptReady = false
 
@@ -1272,9 +1488,17 @@ struct MapLibreMapView: UIViewRepresentable {
                 self.pendingScript = nil
                 return
             }
-            lastEvaluatedScript = pendingScript
+            let script = pendingScript
+            lastEvaluatedScript = script
             self.pendingScript = nil
-            webView.evaluateJavaScript(pendingScript)
+            webView.evaluateJavaScript(script) { [weak self] _, error in
+                guard let error else { return }
+                print("[MyshachkiMap] JavaScript update failed: \(error.localizedDescription)")
+                if self?.lastEvaluatedScript == script {
+                    self?.lastEvaluatedScript = nil
+                    self?.pendingScript = script
+                }
+            }
         }
 
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
@@ -1288,6 +1512,10 @@ struct MapLibreMapView: UIViewRepresentable {
                 flushPendingScriptIfReady()
             } else if message.name == MapLibreMapView.mapInteractionMessageHandler {
                 onUserInteraction?()
+            } else if message.name == MapLibreMapView.coverageMessageHandler {
+                if let coverageGeoJSON = message.body as? String {
+                    onCurrentCoverageChange?(coverageGeoJSON)
+                }
             }
         }
     }

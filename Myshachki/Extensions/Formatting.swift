@@ -22,4 +22,12 @@ extension TimeInterval {
             return String(format: "%02d:%02d", minutes, seconds)
         }
     }
+
+    var formattedPace: String {
+        guard isFinite, self > 0 else { return "Not enough data" }
+        let totalSeconds = Int(self.rounded())
+        let minutes = totalSeconds / 60
+        let seconds = totalSeconds % 60
+        return String(format: "%d:%02d / km", minutes, seconds)
+    }
 }

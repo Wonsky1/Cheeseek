@@ -5,6 +5,7 @@ import SwiftUI
 
 @MainActor
 final class MapViewModel: ObservableObject {
+    private static let emptyFeatureCollection = #"{"type":"FeatureCollection","features":[]}"#
     private static let mapPerspectiveModeDefaultsKey = "myshachki.mapPerspectiveMode"
     private static let mapStyleModeDefaultsKey = "myshachki.mapStyleMode"
 
@@ -22,8 +23,10 @@ final class MapViewModel: ObservableObject {
     @Published private(set) var activeBuildingAreas: [CoverageBuildingArea] = []
     @Published private(set) var permissionMessage = "Allow location to draw live routes."
     @Published var cameraPosition: MapCameraPosition
-    @Published private(set) var mapFeatureGeoJSON = #"{"type":"FeatureCollection","features":[]}"#
-    @Published private(set) var activeRouteGeoJSON = #"{"type":"FeatureCollection","features":[]}"#
+    @Published private(set) var mapFeatureGeoJSON = MapViewModel.emptyFeatureCollection
+    @Published private(set) var activeRouteGeoJSON = MapViewModel.emptyFeatureCollection
+    @Published private(set) var currentSessionCoverageGeoJSON = MapViewModel.emptyFeatureCollection
+    @Published private(set) var summaryCoverageGeoJSON = MapViewModel.emptyFeatureCollection
     @Published private(set) var mapCenterCoordinate: CLLocationCoordinate2D
     @Published private(set) var userCoordinate: CLLocationCoordinate2D?
     @Published var summarySession: WalkSession?
@@ -163,6 +166,8 @@ final class MapViewModel: ObservableObject {
         activeSession = session
         walkState = .recording
         activeCoverageSideIDs = []
+        currentSessionCoverageGeoJSON = Self.emptyFeatureCollection
+        summaryCoverageGeoJSON = Self.emptyFeatureCollection
         liveDistance = 0
         elapsedTime = 0
         syncStatusText = SyncStatus.localOnly.label
@@ -210,6 +215,7 @@ final class MapViewModel: ObservableObject {
         session.durationSeconds = elapsedTime
         session.distanceMeters = liveDistance
         session.syncStatus = .readyToSync
+        summaryCoverageGeoJSON = currentSessionCoverageGeoJSON
         do {
             try await walkSessionStore.saveSession(session)
             storedSessions.insert(session, at: 0)
@@ -245,6 +251,8 @@ final class MapViewModel: ObservableObject {
     func dismissSummary() {
         summarySession = nil
         walkState = .idle
+        currentSessionCoverageGeoJSON = Self.emptyFeatureCollection
+        summaryCoverageGeoJSON = Self.emptyFeatureCollection
         updateMapRoutes()
     }
 
@@ -330,6 +338,12 @@ final class MapViewModel: ObservableObject {
 
     func userDidMoveMap() {
         isFollowingUser = false
+    }
+
+    func currentCoverageDidChange(_ geoJSON: String) {
+        guard activeSession != nil else { return }
+        guard currentSessionCoverageGeoJSON != geoJSON else { return }
+        currentSessionCoverageGeoJSON = geoJSON
     }
 
     var adminSimulationReady: Bool {
@@ -595,7 +609,7 @@ final class MapViewModel: ObservableObject {
             storedSessions: storedSessions,
             activePoints: activeSession?.points ?? []
         )
-        mapFeatureGeoJSON = #"{"type":"FeatureCollection","features":[]}"#
+        mapFeatureGeoJSON = Self.emptyFeatureCollection
     }
 
     private func persistCoverage(from session: WalkSession) async {
@@ -732,7 +746,7 @@ final class MapViewModel: ObservableObject {
         guard JSONSerialization.isValidJSONObject(object),
               let data = try? JSONSerialization.data(withJSONObject: object),
               let string = String(data: data, encoding: .utf8) else {
-            return #"{"type":"FeatureCollection","features":[]}"#
+            return Self.emptyFeatureCollection
         }
         return string
     }

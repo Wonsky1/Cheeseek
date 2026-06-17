@@ -33,7 +33,21 @@ struct WalkLiveActivityWidget: Widget {
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    metricView(title: "Distance", value: formatDistance(context.state.distanceMeters))
+                    HStack(spacing: 8) {
+                        Image(systemName: context.state.isPaused ? "pause.fill" : "figure.walk")
+                            .font(.headline.weight(.bold))
+                            .foregroundStyle(.yellow)
+                            .frame(width: 28, height: 28)
+                            .background(Color.yellow.opacity(0.16), in: Circle())
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(context.state.isPaused ? "Paused" : "Walking")
+                                .font(.caption.weight(.semibold))
+                            Text(context.state.isPaused ? "Ready to resume" : "Live walk")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .lineLimit(1)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     VStack(alignment: .trailing, spacing: 2) {
@@ -41,17 +55,23 @@ struct WalkLiveActivityWidget: Widget {
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                         liveElapsedText(context)
-                            .font(.caption.monospacedDigit().weight(.semibold))
+                            .font(.headline.monospacedDigit().weight(.semibold))
                     }
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    HStack {
-                        Label(context.state.isPaused ? "Paused" : "Walk in progress", systemImage: context.state.isPaused ? "pause.fill" : "figure.walk")
-                        Spacer()
-                        Text(formatCompactDistance(context.state.distanceMeters))
-                            .monospacedDigit()
+                    HStack(spacing: 10) {
+                        dynamicIslandMetric(
+                            title: "Distance",
+                            value: formatDistance(context.state.distanceMeters),
+                            icon: "point.topleft.down.curvedto.point.bottomright.up"
+                        )
+                        dynamicIslandMetric(
+                            title: "Status",
+                            value: context.state.isPaused ? "Paused" : "In progress",
+                            icon: context.state.isPaused ? "pause.fill" : "location.fill"
+                        )
                     }
-                    .font(.caption.weight(.semibold))
+                    .padding(.top, 2)
                 }
             } compactLeading: {
                 Image(systemName: context.state.isPaused ? "pause.fill" : "figure.walk")
@@ -66,14 +86,28 @@ struct WalkLiveActivityWidget: Widget {
         }
     }
 
-    private func metricView(title: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.caption.monospacedDigit().weight(.semibold))
+    private func dynamicIslandMetric(title: String, value: String, icon: String) -> some View {
+        HStack(spacing: 7) {
+            Image(systemName: icon)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.yellow)
+                .frame(width: 18)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Text(value)
+                    .font(.caption.monospacedDigit().weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+            }
+            Spacer(minLength: 0)
         }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     private func formatDistance(_ meters: Double) -> String {

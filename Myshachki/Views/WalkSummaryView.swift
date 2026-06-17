@@ -1,4 +1,3 @@
-import MapKit
 import SwiftUI
 
 struct WalkSummaryContainerView: View {
@@ -9,12 +8,18 @@ struct WalkSummaryContainerView: View {
         session: WalkSession,
         backendSyncService: BackendSyncServing,
         walkSessionStore: WalkSessionStoring,
+        mapPerspectiveMode: MapPerspectiveMode = .flat,
+        mapStyleMode: MapStyleMode = .light,
+        summaryCoverageGeoJSON: String = #"{"type":"FeatureCollection","features":[]}"#,
         dismissAction: @escaping () -> Void
     ) {
         _viewModel = StateObject(wrappedValue: WalkSummaryViewModel(
             session: session,
             backendSyncService: backendSyncService,
-            walkSessionStore: walkSessionStore
+            walkSessionStore: walkSessionStore,
+            mapPerspectiveMode: mapPerspectiveMode,
+            mapStyleMode: mapStyleMode,
+            summaryCoverageGeoJSON: summaryCoverageGeoJSON
         ))
         self.dismissAction = dismissAction
     }
@@ -40,14 +45,19 @@ struct WalkSummaryView: View {
                     if !viewModel.session.points.isEmpty {
                         MapLibreMapView(
                             center: viewModel.mapCenterCoordinate,
-                            buildingGeoJSON: #"{"type":"FeatureCollection","features":[]}"#,
+                            buildingGeoJSON: viewModel.summaryCoverageGeoJSON,
                             routeGeoJSON: viewModel.routeGeoJSON,
                             storageKey: viewModel.mapStorageKey,
+                            perspectiveMode: .flat,
+                            styleMode: viewModel.mapStyleMode,
                             showsUserLocation: false,
+                            smoothUserLocation: false,
                             fitsRouteBounds: true,
-                            fitToken: mapFitToken
+                            fitToken: mapFitToken,
+                            persistsCoverage: false
                         )
-                        .frame(height: 180)
+                        .id(viewModel.session.id)
+                        .frame(height: 240)
                         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                         .task(id: viewModel.session.id) {
                             mapFitToken = 0
@@ -74,23 +84,15 @@ struct WalkSummaryView: View {
                             .foregroundStyle(.secondary)
                         Text(viewModel.newStreetsText)
                             .font(.headline)
-                        Text("New Area")
+                        Text("Pace")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Text(viewModel.newAreaText)
+                        Text(viewModel.paceText)
                             .font(.headline)
                     }
                     .padding(18)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Color.white.opacity(0.9), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-
-                    PrimaryButton(
-                        title: viewModel.isSavingToServer ? "Saving..." : "Save to Shared Map",
-                        icon: "icloud.and.arrow.up",
-                        isDisabled: !viewModel.canSyncToServer
-                    ) {
-                        Task { await viewModel.syncToServer() }
-                    }
 
                     PrimaryButton(title: "View Full Map", icon: "map.fill", prominent: false) {
                         dismiss()

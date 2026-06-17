@@ -38,7 +38,9 @@ struct RootTabView: View {
             ActivityView(
                 viewModel: activityViewModel,
                 backendSyncService: dependencies.backendSyncService,
-                walkSessionStore: dependencies.walkSessionStore
+                walkSessionStore: dependencies.walkSessionStore,
+                mapPerspectiveMode: mapViewModel.mapPerspectiveMode,
+                mapStyleMode: mapViewModel.mapStyleMode
             )
                 .tabItem {
                     Label("Activity", systemImage: "figure.walk")

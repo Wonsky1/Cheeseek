@@ -16,6 +16,7 @@ struct MapScreen: View {
                 styleMode: viewModel.mapStyleMode,
                 showsUserLocation: viewModel.showsUserLocation,
                 smoothUserLocation: !viewModel.isAdminMode,
+                onCurrentCoverageChange: { viewModel.currentCoverageDidChange($0) },
                 onUserInteraction: { viewModel.userDidMoveMap() }
             )
             .ignoresSafeArea()
@@ -141,6 +142,9 @@ struct MapScreen: View {
                 session: session,
                 backendSyncService: backendSyncService,
                 walkSessionStore: viewModel.summaryWalkSessionStore,
+                mapPerspectiveMode: viewModel.mapPerspectiveMode,
+                mapStyleMode: viewModel.mapStyleMode,
+                summaryCoverageGeoJSON: viewModel.summaryCoverageGeoJSON,
                 dismissAction: { viewModel.dismissSummary() }
             )
         }

@@ -4,15 +4,12 @@ import Foundation
 @MainActor
 final class WalkLiveActivityService {
     private var activity: Activity<WalkLiveActivityAttributes>?
+    private var startTask: Task<Void, Never>?
 
     func start(startedAt: Date, distanceMeters: Double, elapsedSeconds: TimeInterval) {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
-        activity = Activity<WalkLiveActivityAttributes>.activities.first
-        guard activity == nil else {
-            update(distanceMeters: distanceMeters, elapsedSeconds: elapsedSeconds, isPaused: false)
-            return
-        }
-
+        startTask?.cancel()
+        activity = nil
         let attributes = WalkLiveActivityAttributes(startedAt: startedAt)
         let state = WalkLiveActivityAttributes.ContentState(
             distanceMeters: distanceMeters,
@@ -20,13 +17,22 @@ final class WalkLiveActivityService {
             isPaused: false
         )
 
-        do {
-            activity = try Activity.request(
-                attributes: attributes,
-                content: ActivityContent(state: state, staleDate: nil)
-            )
-        } catch {
-            activity = nil
+        startTask = Task { @MainActor [weak self] in
+            for existingActivity in Activity<WalkLiveActivityAttributes>.activities {
+                await existingActivity.end(
+                    ActivityContent(state: state, staleDate: nil),
+                    dismissalPolicy: .immediate
+                )
+            }
+            guard !Task.isCancelled else { return }
+            do {
+                self?.activity = try Activity.request(
+                    attributes: attributes,
+                    content: ActivityContent(state: state, staleDate: nil)
+                )
+            } catch {
+                self?.activity = nil
+            }
         }
     }
 
@@ -46,6 +52,8 @@ final class WalkLiveActivityService {
     }
 
     func end(distanceMeters: Double, elapsedSeconds: TimeInterval) {
+        startTask?.cancel()
+        startTask = nil
         if activity == nil {
             activity = Activity<WalkLiveActivityAttributes>.activities.first
         }

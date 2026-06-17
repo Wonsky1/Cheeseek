@@ -4,6 +4,8 @@ struct ActivityView: View {
     @ObservedObject var viewModel: ActivityViewModel
     let backendSyncService: BackendSyncServing
     let walkSessionStore: WalkSessionStoring
+    let mapPerspectiveMode: MapPerspectiveMode
+    let mapStyleMode: MapStyleMode
 
     var body: some View {
         NavigationStack {
@@ -17,6 +19,8 @@ struct ActivityView: View {
                                 session: session,
                                 backendSyncService: backendSyncService,
                                 walkSessionStore: walkSessionStore,
+                                mapPerspectiveMode: mapPerspectiveMode,
+                                mapStyleMode: mapStyleMode,
                                 dismissAction: {}
                             )
                         } label: {
