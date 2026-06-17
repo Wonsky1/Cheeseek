@@ -20,24 +20,24 @@ We are in `dev-pipeline` planning-only mode.
 - **Phase 4: Implementation** is intentionally not performed in this handoff.
 - **Phase 5: Quality Gate** is described as verification commands and manual checks for the implementer.
 
-Assumption to confirm if needed: there is no existing backend repo yet. This plan assumes a new lightweight backend can live under `/Users/vlad/Xcode projects/Myshachki/backend/` for the POC, then later move to a separate repo/server deployment if desired.
+Assumption to confirm if needed: there is no existing backend repo yet. This plan assumes a new lightweight backend can live under `/Users/vlad/Xcode projects/Cheeseek/backend/` for the POC, then later move to a separate repo/server deployment if desired.
 
 Backend build handoff prompt/spec:
 
-- `/Users/vlad/Xcode projects/Myshachki/docs/plans/2026-06-08-backend-requirements-prompt.md`
+- `/Users/vlad/Xcode projects/Cheeseek/docs/plans/2026-06-08-backend-requirements-prompt.md`
 
 ## Current Project Context
 
-- Repo root: `/Users/vlad/Xcode projects/Myshachki`
-- Xcode project: `/Users/vlad/Xcode projects/Myshachki/Myshachki.xcodeproj`
+- Repo root: `/Users/vlad/Xcode projects/Cheeseek`
+- Xcode project: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek.xcodeproj`
 - Existing source files:
-  - `/Users/vlad/Xcode projects/Myshachki/Myshachki/MyshachkiApp.swift`
-  - `/Users/vlad/Xcode projects/Myshachki/Myshachki/ContentView.swift`
+  - `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/CheeseekApp.swift`
+  - `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/ContentView.swift`
 - Existing app is a default "Hello, world!" SwiftUI starter.
-- The project uses `PBXFileSystemSynchronizedRootGroup` for the `Myshachki/` folder. New Swift files placed under `/Users/vlad/Xcode projects/Myshachki/Myshachki/` should be picked up by Xcode without manually adding PBX file references.
+- The project uses `PBXFileSystemSynchronizedRootGroup` for the `Cheeseek/` folder. New Swift files placed under `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/` should be picked up by Xcode without manually adding PBX file references.
 - `GENERATE_INFOPLIST_FILE = YES`, so location permission text should be added through build settings unless the implementer chooses to create a custom Info.plist.
 - Current target settings include iOS, iOS Simulator, macOS, and xros. This MVP is iOS-first and should be built against iPhone/iPad simulator or device destinations.
-- Current bundle identifier: `wonsky.Myshachki`
+- Current bundle identifier: `wonsky.Cheeseek`
 - Current deployment target: `26.5`
 - Swift default actor isolation: `MainActor`
 
@@ -120,7 +120,7 @@ Keep Cheese Hunt Mode local-first for MVP. Do not add external APIs just to get 
 - **Use simple backend framework:** FastAPI is a good fit for a tiny private REST API and was already anticipated by the original endpoint examples.
 - **Use server DB:** SQLite is enough for two-person POC if deployment simplicity matters; PostgreSQL is preferable if the server already has it or if you want smoother growth.
 - **Do not add dependencies:** the requirements explicitly prefer native Apple frameworks and no paid/external map stack.
-- **Use existing Xcode structure:** add folders inside `Myshachki/`; the synchronized root group should include them automatically.
+- **Use existing Xcode structure:** add folders inside `Cheeseek/`; the synchronized root group should include them automatically.
 - **Build app-specific domain logic:** walk session lifecycle, GPS filtering, persistence format, user profile linking, server sync, mock shared routes.
 
 ### Data Flow
@@ -144,16 +144,16 @@ Keep Cheese Hunt Mode local-first for MVP. Do not add external APIs just to get 
 | Repository-like store protocol | Yes | `WalkSessionStore` lets file persistence be swapped for SwiftData or backend-backed storage later. |
 | Backend adapter protocol | Yes | Keeps networking behind a stable boundary; preview/mock clients can coexist with the real FastAPI client. |
 | State machine enum | Yes | Walk lifecycle is clearer as `idle`, `recording`, `paused`, `finished`. |
-| Heavy DI container | No | Overkill for a small personal MVP; wire dependencies in `MyshachkiApp` or `ContentView`. |
+| Heavy DI container | No | Overkill for a small personal MVP; wire dependencies in `CheeseekApp` or `ContentView`. |
 | SwiftData | No, unless already present | Existing project does not use SwiftData. Codable file storage is simpler and reliable for MVP. |
 | Auth framework | No | Nickname-only POC is intentionally not secure auth; add real auth later when the private backend shape is proven. |
 
 ### Proposed File Tree
 
-Create these files under `/Users/vlad/Xcode projects/Myshachki/Myshachki/`:
+Create these files under `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/`:
 
 ```text
-Myshachki/
+Cheeseek/
 ├── App/
 │   └── AppDependencies.swift
 ├── Models/
@@ -195,11 +195,11 @@ Myshachki/
 │   ├── PrimaryButton.swift
 │   ├── ProgressCard.swift
 │   └── SummaryStatCard.swift
-├── MyshachkiApp.swift
+├── CheeseekApp.swift
 └── ContentView.swift
 ```
 
-Create these backend POC files under `/Users/vlad/Xcode projects/Myshachki/backend/`:
+Create these backend POC files under `/Users/vlad/Xcode projects/Cheeseek/backend/`:
 
 ```text
 backend/
@@ -223,9 +223,9 @@ backend/
 
 Modify:
 
-- `/Users/vlad/Xcode projects/Myshachki/Myshachki/ContentView.swift`
-- `/Users/vlad/Xcode projects/Myshachki/Myshachki/MyshachkiApp.swift` if wiring dependencies at app level
-- `/Users/vlad/Xcode projects/Myshachki/Myshachki.xcodeproj/project.pbxproj` for location permission build setting and optional platform cleanup
+- `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/ContentView.swift`
+- `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/CheeseekApp.swift` if wiring dependencies at app level
+- `/Users/vlad/Xcode projects/Cheeseek/Cheeseek.xcodeproj/project.pbxproj` for location permission build setting and optional platform cleanup
 
 ## Key Model Contracts
 
@@ -363,8 +363,8 @@ Production auth later should replace nickname relinking. Until then, document cl
 
 **Files:**
 - Create folders listed in the proposed file tree.
-- Modify: `/Users/vlad/Xcode projects/Myshachki/Myshachki/ContentView.swift`
-- Create: `/Users/vlad/Xcode projects/Myshachki/Myshachki/Views/RootTabView.swift`
+- Modify: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/ContentView.swift`
+- Create: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/Views/RootTabView.swift`
 
 - [ ] Replace the starter `ContentView` with a root shell that displays `RootTabView`.
 - [ ] Add a tab view with four tabs: Map, Activity, Profile, Shared.
@@ -376,7 +376,7 @@ Production auth later should replace nickname relinking. Until then, document cl
 Run:
 
 ```bash
-xcodebuild -project Myshachki.xcodeproj -scheme Myshachki -destination 'platform=iOS Simulator,name=iPhone 17' build
+xcodebuild -project Cheeseek.xcodeproj -scheme Cheeseek -destination 'platform=iOS Simulator,name=iPhone 17' build
 ```
 
 Expected: build succeeds or fails only because later referenced files have not yet been created. After completing this task fully, the shell should build.
@@ -384,7 +384,7 @@ Expected: build succeeds or fails only because later referenced files have not y
 ### Task 2: Add Domain Models
 
 **Files:**
-- Create all files under `/Users/vlad/Xcode projects/Myshachki/Myshachki/Models/`
+- Create all files under `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/Models/`
 
 - [ ] Implement `TrackPoint` with computed `coordinate: CLLocationCoordinate2D` in a non-Codable extension.
 - [ ] Implement `WalkSession` with helper properties for `isFinished`, formatted duration if desired, and a static factory for a new local session.
@@ -400,10 +400,10 @@ Expected: models compile.
 ### Task 3: Implement Local Persistence
 
 **Files:**
-- Create: `/Users/vlad/Xcode projects/Myshachki/Myshachki/Services/WalkSessionStore.swift`
+- Create: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/Services/WalkSessionStore.swift`
 
 - [ ] Define a `WalkSessionStoring` protocol with `loadSessions() async throws -> [WalkSession]`, `saveSession(_:) async throws`, and `replaceSessions(_:) async throws`.
-- [ ] Implement `FileWalkSessionStore` using JSON in Application Support, e.g. `Application Support/Myshachki/walk-sessions.json`.
+- [ ] Implement `FileWalkSessionStore` using JSON in Application Support, e.g. `Application Support/Cheeseek/walk-sessions.json`.
 - [ ] Use `FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)`.
 - [ ] Create the directory if missing.
 - [ ] Use `JSONEncoder` / `JSONDecoder` with `.iso8601` dates or default Date encoding consistently.
@@ -419,12 +419,12 @@ Expected: persistence compiles with async callers available for view models.
 ### Task 4: Implement Backend POC Server
 
 **Files:**
-- Create all files under `/Users/vlad/Xcode projects/Myshachki/backend/`
-- Reference: `/Users/vlad/Xcode projects/Myshachki/docs/plans/2026-06-08-backend-requirements-prompt.md`
+- Create all files under `/Users/vlad/Xcode projects/Cheeseek/backend/`
+- Reference: `/Users/vlad/Xcode projects/Cheeseek/docs/plans/2026-06-08-backend-requirements-prompt.md`
 
 - [ ] Follow the backend requirements prompt/spec exactly.
 - [ ] Create a FastAPI app with routers for profiles, walk sessions, health, and shared progress.
-- [ ] Use SQLite by default at `backend/data/myshachki.sqlite3`; make database URL configurable through `.env`.
+- [ ] Use SQLite by default at `backend/data/cheeseek.sqlite3`; make database URL configurable through `.env`.
 - [ ] Add tables/models for:
   - `profiles`: id UUID, nickname unique, device_id, created_at
   - `walk_sessions`: id UUID, user_id, started_at, ended_at, distance_meters, duration_seconds, sync_status, created_at
@@ -438,7 +438,7 @@ Expected: persistence compiles with async callers available for view models.
 
 **Verify:**
 
-Run from `/Users/vlad/Xcode projects/Myshachki/backend`:
+Run from `/Users/vlad/Xcode projects/Cheeseek/backend`:
 
 ```bash
 python3 -m venv .venv
@@ -460,12 +460,12 @@ Expected: JSON profile with stable UUID.
 ### Task 4A: Implement iOS API Client And Profile Storage
 
 **Files:**
-- Create: `/Users/vlad/Xcode projects/Myshachki/Myshachki/Models/APIModels.swift`
-- Create: `/Users/vlad/Xcode projects/Myshachki/Myshachki/Models/UserProfile.swift`
-- Create: `/Users/vlad/Xcode projects/Myshachki/Myshachki/Services/APIClient.swift`
-- Create: `/Users/vlad/Xcode projects/Myshachki/Myshachki/Services/ProfileStore.swift`
-- Create: `/Users/vlad/Xcode projects/Myshachki/Myshachki/Services/ProfileService.swift`
-- Create: `/Users/vlad/Xcode projects/Myshachki/Myshachki/Services/ServerConfiguration.swift`
+- Create: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/Models/APIModels.swift`
+- Create: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/Models/UserProfile.swift`
+- Create: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/Services/APIClient.swift`
+- Create: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/Services/ProfileStore.swift`
+- Create: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/Services/ProfileService.swift`
+- Create: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/Services/ServerConfiguration.swift`
 
 - [ ] `ServerConfiguration` should hold the base URL, defaulting to `http://127.0.0.1:8000` for simulator.
 - [ ] Add a clear note that real iPhone cannot use `127.0.0.1` to reach the Mac/server; it needs the Mac LAN IP or deployed server URL.
@@ -488,7 +488,7 @@ Expected: API/profile types compile.
 ### Task 4B: Implement Real Backend Sync Service
 
 **Files:**
-- Create/modify: `/Users/vlad/Xcode projects/Myshachki/Myshachki/Services/BackendSyncService.swift`
+- Create/modify: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/Services/BackendSyncService.swift`
 
 - [ ] Define a `BackendSyncServing` protocol with:
   - `syncWalkSession(_ session: WalkSession) async throws`
@@ -512,10 +512,10 @@ Expected: sync protocol, HTTP implementation, and mock implementation compile.
 ### Task 4C: Add Profile Onboarding And Reinstall Recovery
 
 **Files:**
-- Create: `/Users/vlad/Xcode projects/Myshachki/Myshachki/ViewModels/ProfileViewModel.swift`
-- Modify/create: `/Users/vlad/Xcode projects/Myshachki/Myshachki/Views/ProfileView.swift`
-- Modify: `/Users/vlad/Xcode projects/Myshachki/Myshachki/Views/RootTabView.swift`
-- Modify: `/Users/vlad/Xcode projects/Myshachki/Myshachki/App/AppDependencies.swift`
+- Create: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/ViewModels/ProfileViewModel.swift`
+- Modify/create: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/Views/ProfileView.swift`
+- Modify: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/Views/RootTabView.swift`
+- Modify: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/App/AppDependencies.swift`
 
 - [ ] On first launch, ask for nickname before or on the Profile tab.
 - [ ] Call `ProfileService` to create/relink the profile on the server.
@@ -531,7 +531,7 @@ Start backend locally, run the app in simulator, enter nickname, relaunch app, a
 ### Task 5: Implement Mock Routes
 
 **Files:**
-- Create: `/Users/vlad/Xcode projects/Myshachki/Myshachki/Services/MockRouteProvider.swift`
+- Create: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/Services/MockRouteProvider.swift`
 
 - [ ] Provide several hard-coded route polylines centered around Warsaw by default, e.g. near `52.2297, 21.0122`.
 - [ ] Include separate route ownership/style values for me, partner, and together.
@@ -547,8 +547,8 @@ Expected: mock routes compile.
 ### Task 6: Implement Location Manager
 
 **Files:**
-- Create: `/Users/vlad/Xcode projects/Myshachki/Myshachki/Services/LocationManager.swift`
-- Modify: `/Users/vlad/Xcode projects/Myshachki/Myshachki.xcodeproj/project.pbxproj`
+- Create: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/Services/LocationManager.swift`
+- Modify: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek.xcodeproj/project.pbxproj`
 
 - [ ] Implement `final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate`.
 - [ ] Publish authorization status, latest location, latest accuracy, and a user-facing status string.
@@ -580,7 +580,7 @@ TARGETED_DEVICE_FAMILY = "1,2";
 Run:
 
 ```bash
-xcodebuild -project Myshachki.xcodeproj -scheme Myshachki -destination 'platform=iOS Simulator,name=iPhone 17' build
+xcodebuild -project Cheeseek.xcodeproj -scheme Cheeseek -destination 'platform=iOS Simulator,name=iPhone 17' build
 ```
 
 Expected: build succeeds and the generated app Info.plist contains `NSLocationWhenInUseUsageDescription`.
@@ -588,13 +588,13 @@ Expected: build succeeds and the generated app Info.plist contains `NSLocationWh
 Optional check:
 
 ```bash
-xcodebuild -project Myshachki.xcodeproj -scheme Myshachki -showBuildSettings | rg 'NSLocationWhenInUse|SUPPORTED_PLATFORMS|TARGETED_DEVICE_FAMILY'
+xcodebuild -project Cheeseek.xcodeproj -scheme Cheeseek -showBuildSettings | rg 'NSLocationWhenInUse|SUPPORTED_PLATFORMS|TARGETED_DEVICE_FAMILY'
 ```
 
 ### Task 7: Implement Map View Model
 
 **Files:**
-- Create: `/Users/vlad/Xcode projects/Myshachki/Myshachki/ViewModels/MapViewModel.swift`
+- Create: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/ViewModels/MapViewModel.swift`
 
 - [ ] Inject `LocationManager`, `WalkSessionStoring`, `BackendSyncServing`, and `MockRouteProvider`.
 - [ ] Publish:
@@ -627,7 +627,7 @@ Expected: view model compiles and does not require UI to perform local persisten
 ### Task 8: Implement Reusable UI Components
 
 **Files:**
-- Create all files under `/Users/vlad/Xcode projects/Myshachki/Myshachki/Components/`
+- Create all files under `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/Components/`
 
 - [ ] `PrimaryButton`: large filled button with optional disabled/loading style.
 - [ ] `FilterSegmentControl`: floating segmented control for `MapFilter.allCases`.
@@ -647,8 +647,8 @@ Expected: components compile independently.
 ### Task 9: Implement Main Map Screen
 
 **Files:**
-- Create: `/Users/vlad/Xcode projects/Myshachki/Myshachki/Views/MapScreen.swift`
-- Modify: `/Users/vlad/Xcode projects/Myshachki/Myshachki/Views/RootTabView.swift`
+- Create: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/Views/MapScreen.swift`
+- Modify: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/Views/RootTabView.swift`
 
 - [ ] Use SwiftUI `Map` with `MapPolyline` overlays for stored routes, mock routes, and active route.
 - [ ] Show user location using native map user annotation APIs.
@@ -669,8 +669,8 @@ Expected: app builds and shows a full-screen map with mock route overlays on fir
 ### Task 10: Implement Walk Summary Screen
 
 **Files:**
-- Create: `/Users/vlad/Xcode projects/Myshachki/Myshachki/ViewModels/WalkSummaryViewModel.swift`
-- Create: `/Users/vlad/Xcode projects/Myshachki/Myshachki/Views/WalkSummaryView.swift`
+- Create: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/ViewModels/WalkSummaryViewModel.swift`
+- Create: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/Views/WalkSummaryView.swift`
 
 - [ ] Show title: "Great walk!"
 - [ ] Show distance, duration, track point count, new streets placeholder, and new area placeholder.
@@ -688,11 +688,11 @@ Expected: finishing a mock/manual walk can present and dismiss the summary.
 ### Task 11: Implement Secondary Tabs
 
 **Files:**
-- Create: `/Users/vlad/Xcode projects/Myshachki/Myshachki/ViewModels/ActivityViewModel.swift`
-- Create: `/Users/vlad/Xcode projects/Myshachki/Myshachki/Views/ActivityView.swift`
-- Create: `/Users/vlad/Xcode projects/Myshachki/Myshachki/Views/ProfileView.swift`
-- Create: `/Users/vlad/Xcode projects/Myshachki/Myshachki/Views/SharedView.swift`
-- Modify: `/Users/vlad/Xcode projects/Myshachki/Myshachki/Views/RootTabView.swift`
+- Create: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/ViewModels/ActivityViewModel.swift`
+- Create: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/Views/ActivityView.swift`
+- Create: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/Views/ProfileView.swift`
+- Create: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/Views/SharedView.swift`
+- Modify: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/Views/RootTabView.swift`
 
 - [ ] Activity should list locally saved walk sessions with distance, date, duration, and sync status.
 - [ ] Profile should show nickname, server profile id, device id, total distance, total walks, and sync/relink controls.
@@ -708,10 +708,10 @@ Expected: all tabs navigate without crashes or empty default demo content.
 ### Task 12: Wire Dependencies At Composition Root
 
 **Files:**
-- Create: `/Users/vlad/Xcode projects/Myshachki/Myshachki/App/AppDependencies.swift`
-- Modify: `/Users/vlad/Xcode projects/Myshachki/Myshachki/MyshachkiApp.swift`
-- Modify: `/Users/vlad/Xcode projects/Myshachki/Myshachki/ContentView.swift`
-- Modify: `/Users/vlad/Xcode projects/Myshachki/Myshachki/Views/RootTabView.swift`
+- Create: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/App/AppDependencies.swift`
+- Modify: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/CheeseekApp.swift`
+- Modify: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/ContentView.swift`
+- Modify: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/Views/RootTabView.swift`
 
 - [ ] Create `AppDependencies` containing shared instances:
   - `ServerConfiguration`
@@ -723,7 +723,7 @@ Expected: all tabs navigate without crashes or empty default demo content.
   - `HTTPBackendSyncService`
   - `MockBackendSyncService` for previews only if useful
   - `MockRouteProvider`
-- [ ] Instantiate dependencies once in `MyshachkiApp` with `@StateObject` where applicable.
+- [ ] Instantiate dependencies once in `CheeseekApp` with `@StateObject` where applicable.
 - [ ] Pass dependencies into `ContentView`/`RootTabView`/`MapScreen`.
 - [ ] Avoid hidden singletons. `FileManager.default` and `CLLocationManager` are acceptable inside infrastructure services.
 
@@ -761,7 +761,7 @@ Run the iOS simulator build command and manually inspect in an iPhone simulator.
 - [ ] Run a clean simulator build:
 
 ```bash
-xcodebuild clean build -project Myshachki.xcodeproj -scheme Myshachki -destination 'platform=iOS Simulator,name=iPhone 17'
+xcodebuild clean build -project Cheeseek.xcodeproj -scheme Cheeseek -destination 'platform=iOS Simulator,name=iPhone 17'
 ```
 
 - [ ] Open the app in Xcode or run to simulator.
@@ -874,10 +874,10 @@ enum HuntStatus: String, Codable {
 ### Cheese Task 1: Add Hunt Models
 
 **Files:**
-- Create: `/Users/vlad/Xcode projects/Myshachki/Myshachki/Models/SpawnArea.swift`
-- Create: `/Users/vlad/Xcode projects/Myshachki/Myshachki/Models/CheeseTarget.swift`
-- Create: `/Users/vlad/Xcode projects/Myshachki/Myshachki/Models/HuntSession.swift`
-- Create: `/Users/vlad/Xcode projects/Myshachki/Myshachki/Models/HuntStatus.swift`
+- Create: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/Models/SpawnArea.swift`
+- Create: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/Models/CheeseTarget.swift`
+- Create: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/Models/HuntSession.swift`
+- Create: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/Models/HuntStatus.swift`
 
 - [ ] Add the model contracts above.
 - [ ] Add computed coordinate helpers in extensions where useful.
@@ -889,7 +889,7 @@ Run the iOS simulator build command.
 ### Cheese Task 2: Add Spawn Service
 
 **Files:**
-- Create: `/Users/vlad/Xcode projects/Myshachki/Myshachki/Services/CheeseSpawnService.swift`
+- Create: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/Services/CheeseSpawnService.swift`
 
 - [ ] Define `CheeseSpawnServing` protocol.
 - [ ] Generate random candidate coordinates inside `SpawnArea`.
@@ -906,9 +906,9 @@ Run the iOS simulator build command and test candidate generation from a known W
 ### Cheese Task 3: Add Hunt Setup UI
 
 **Files:**
-- Create: `/Users/vlad/Xcode projects/Myshachki/Myshachki/ViewModels/CheeseHuntViewModel.swift`
-- Create: `/Users/vlad/Xcode projects/Myshachki/Myshachki/Views/CheeseHuntSetupView.swift`
-- Modify: `/Users/vlad/Xcode projects/Myshachki/Myshachki/Views/MapScreen.swift`
+- Create: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/ViewModels/CheeseHuntViewModel.swift`
+- Create: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/Views/CheeseHuntSetupView.swift`
+- Modify: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/Views/MapScreen.swift`
 
 - [ ] Add a way to enter Cheese Hunt setup from the map.
 - [ ] Let user define a rectangular spawn area. MVP can start with a draggable/resizable rectangle overlay if feasible; otherwise use "use visible map area" as the rectangle.
@@ -924,9 +924,9 @@ Run the app and confirm a hunt can be configured without starting GPS recording 
 ### Cheese Task 4: Add Active Hunt UI And Win Detection
 
 **Files:**
-- Create: `/Users/vlad/Xcode projects/Myshachki/Myshachki/Components/CheeseHuntCard.swift`
-- Modify: `/Users/vlad/Xcode projects/Myshachki/Myshachki/ViewModels/CheeseHuntViewModel.swift`
-- Modify: `/Users/vlad/Xcode projects/Myshachki/Myshachki/Views/MapScreen.swift`
+- Create: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/Components/CheeseHuntCard.swift`
+- Modify: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/ViewModels/CheeseHuntViewModel.swift`
+- Modify: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/Views/MapScreen.swift`
 
 - [ ] Show active hunt status on the map.
 - [ ] If hints are off, show only minimal status: hidden target, elapsed time, and maybe "searching".
@@ -942,7 +942,7 @@ Use simulator location changes or a temporary debug coordinate override during d
 ### Cheese Task 5: Persist Hunt History Later If Useful
 
 **Files:**
-- Optional create: `/Users/vlad/Xcode projects/Myshachki/Myshachki/Services/HuntSessionStore.swift`
+- Optional create: `/Users/vlad/Xcode projects/Cheeseek/Cheeseek/Services/HuntSessionStore.swift`
 
 - [ ] For the first Cheese Hunt MVP, active hunt state can be in memory if implementation speed matters.
 - [ ] If data-loss protection matters for hunts too, add Codable file persistence similar to `WalkSessionStore`.
@@ -968,7 +968,7 @@ When implementation is complete, report:
   - how to start backend
   - nickname is not real authentication
 - How to run on simulator:
-  - pick `Myshachki` scheme
+  - pick `Cheeseek` scheme
   - choose an iPhone simulator
   - build/run
 - How to run on iPhone:

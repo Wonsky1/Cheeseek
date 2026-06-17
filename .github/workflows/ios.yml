@@ -1,0 +1,23 @@
+name: iOS CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Build for testing
+        run: xcodebuild build-for-testing -project Cheeseek.xcodeproj -scheme Cheeseek -destination 'generic/platform=iOS Simulator'

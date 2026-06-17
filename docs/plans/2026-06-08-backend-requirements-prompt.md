@@ -1,10 +1,10 @@
-# Myshachki Backend Requirements Prompt
+# Cheeseek Backend Requirements Prompt
 
-Use this document as the complete prompt/instructions for creating the Myshachki backend POC.
+Use this document as the complete prompt/instructions for creating the Cheeseek backend POC.
 
 ## Copy-Paste Prompt
 
-You are building the backend POC for **Myshachki**, a private two-person iOS walking/exploration app. Build a small, maintainable FastAPI backend that stores nickname-only user profiles, walk sessions, track points, and simple shared progress. The iOS app is manually installed through Xcode, so server storage is required because local app data may be lost on reinstall.
+You are building the backend POC for **Cheeseek**, a private two-person iOS walking/exploration app. Build a small, maintainable FastAPI backend that stores nickname-only user profiles, walk sessions, track points, and simple shared progress. The iOS app is manually installed through Xcode, so server storage is required because local app data may be lost on reinstall.
 
 Implement the backend exactly from the requirements below.
 
@@ -82,7 +82,7 @@ Use Python 3.11+.
 `.env.example`:
 
 ```text
-DATABASE_URL=sqlite:///./data/myshachki.sqlite3
+DATABASE_URL=sqlite:///./data/cheeseek.sqlite3
 APP_ENV=development
 ```
 

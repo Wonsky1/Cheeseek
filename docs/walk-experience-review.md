@@ -1,8 +1,8 @@
-# Myshachki — Walk Experience Review
+# Cheeseek — Walk Experience Review
 
 **Date:** 2026-06-16
 **Scope:** Walk recording → live coverage painting → walk summary screen, plus the GPS pipeline.
-**Reviewer:** Engineering review (code read of `Myshachki/` + `docs/sandbox/`).
+**Reviewer:** Engineering review (code read of `Cheeseek/` + `docs/sandbox/`).
 
 ---
 
@@ -51,13 +51,13 @@ There are **two coverage truths**:
 
 - **(A) Live map (real):** `MapLibreMapView` JS queries the OSM vector-tile `building` layer along the
   route and paints the actual buildings, persisting them to the WebView's `localStorage`
-  (`myshachki.coveredBuildings.v2.<storageKey>`). See `processRouteCoordinates` /
-  `queryRenderedBuildings` in `Myshachki/Components/MapLibreMapView.swift`.
+  (`cheeseek.coveredBuildings.v2.<storageKey>`). See `processRouteCoordinates` /
+  `queryRenderedBuildings` in `Cheeseek/Components/MapLibreMapView.swift`.
 - **(B) Swift side (synthetic):** `CoverageBuildingCodec` invents building "sides" as 30×24 m rectangles
   offset 28 m perpendicular to the path and snapped to a coarse grid. These do **not** correspond to any
-  real building. See `Myshachki/Models/CoverageBuildingArea.swift`.
+  real building. See `Cheeseek/Models/CoverageBuildingArea.swift`.
 
-```50:107:Myshachki/Models/CoverageBuildingArea.swift
+```50:107:Cheeseek/Models/CoverageBuildingArea.swift
     static func sides(from points: [TrackPoint]) -> [CoverageBuildingSide] {
         guard points.count > 1 else { return [] }
         var seenIDs: Set<String> = []
@@ -81,7 +81,7 @@ from **(A)**. They are computed differently and never compared.
 **Observation.** The number on the summary ("`\(newBuildingCount) buildings`") is derived from the
 synthetic codec, not from the buildings that were actually highlighted on the map.
 
-```32:34:Myshachki/ViewModels/WalkSummaryViewModel.swift
+```32:34:Cheeseek/ViewModels/WalkSummaryViewModel.swift
         self.newBuildingCount = CoverageBuildingCodec.buildingIDs(
             from: CoverageBuildingCodec.sideIDs(from: session.points)
         ).count
@@ -96,7 +96,7 @@ synthetic codec, not from the buildings that were actually highlighted on the ma
 
 **Recommendation.** Establish **one source of truth: real OSM buildings**.
 - During the live walk the JS already determines the real covered features. Bridge that set back to Swift
-  via a new `WKScriptMessageHandler` message (e.g. `myshachkiCoverage` posting `{id, polygon, status}`),
+  via a new `WKScriptMessageHandler` message (e.g. `cheeseekCoverage` posting `{id, polygon, status}`),
   so `MapViewModel` owns the canonical covered-building set *with geometry*.
 - Persist & sync *that* (id + minimal polygon) instead of synthetic side IDs.
 - Keep `CoverageBuildingCodec` only as an offline fallback (no tiles loaded), clearly labeled.
@@ -122,7 +122,7 @@ synthetic codec, not from the buildings that were actually highlighted on the ma
 map: a fake diagonal street grid, fake roads sprinkled along the route, and "discovered" blocks placed by
 a deterministic jitter function — not real buildings.
 
-```71:116:Myshachki/Views/WalkSummarySnapshotView.swift
+```71:116:Cheeseek/Views/WalkSummarySnapshotView.swift
     private func drawDiscoveredBlocks(
         in context: GraphicsContext,
         projection: SummarySnapshotProjection,
@@ -173,7 +173,7 @@ drawing) rather than leaving two summary implementations.
 **Observation.** Buildings are detected with `map.queryRenderedFeatures(...)` along the route. That API
 **only returns features for tiles currently loaded and rendered** in the WebView viewport.
 
-```1197:1208:Myshachki/Components/MapLibreMapView.swift
+```1197:1208:Cheeseek/Components/MapLibreMapView.swift
         function queryRenderedBuildings(x, y, radius) {
           const bounds = [
             [x - radius, y - radius],
@@ -220,7 +220,7 @@ Consequences:
 and a 3 m min-move gate). There is **no smoothing of the recorded path** — no outlier rejection, no
 speed/heading sanity check, no Kalman/exponential smoothing.
 
-```533:544:Myshachki/ViewModels/MapViewModel.swift
+```533:544:Cheeseek/ViewModels/MapViewModel.swift
     private func shouldAccept(location: CLLocation) -> Bool {
         if location.horizontalAccuracy < 0 || location.horizontalAccuracy > LocationManager.maxAcceptedHorizontalAccuracy {
             return false
@@ -267,7 +267,7 @@ again inside `refreshMapData()` (called from `consumeLatestLocationIfNeeded`). O
 calls `map.stop()` before every `easeTo`, cancelling any in-flight ease (including the smooth user-dot
 animation timing).
 
-```423:434:Myshachki/ViewModels/MapViewModel.swift
+```423:434:Cheeseek/ViewModels/MapViewModel.swift
     private func handleLocationUpdate(_ location: CLLocation) {
         userCoordinate = location.coordinate
         if isFollowingUser {
@@ -282,7 +282,7 @@ animation timing).
     }
 ```
 
-```558:575:Myshachki/Components/MapLibreMapView.swift
+```558:575:Cheeseek/Components/MapLibreMapView.swift
         function applyCamera() {
           ...
           map.stop();
@@ -346,12 +346,12 @@ animation timing).
 
 | Concern | File |
 |---|---|
-| GPS acquisition | `Myshachki/Services/LocationManager.swift` |
-| Walk orchestration, filtering, camera | `Myshachki/ViewModels/MapViewModel.swift` |
-| Live map + real coverage (JS) | `Myshachki/Components/MapLibreMapView.swift` |
-| Synthetic coverage model | `Myshachki/Models/CoverageBuildingArea.swift` |
-| Summary screen (now real map) | `Myshachki/Views/WalkSummaryView.swift` |
-| Summary view model / stats | `Myshachki/ViewModels/WalkSummaryViewModel.swift` |
+| GPS acquisition | `Cheeseek/Services/LocationManager.swift` |
+| Walk orchestration, filtering, camera | `Cheeseek/ViewModels/MapViewModel.swift` |
+| Live map + real coverage (JS) | `Cheeseek/Components/MapLibreMapView.swift` |
+| Synthetic coverage model | `Cheeseek/Models/CoverageBuildingArea.swift` |
+| Summary screen (now real map) | `Cheeseek/Views/WalkSummaryView.swift` |
+| Summary view model / stats | `Cheeseek/ViewModels/WalkSummaryViewModel.swift` |
 | Real-map summary prototype | `docs/sandbox/summary-map-sandbox.html` |
-| Coverage persistence (local) | `Myshachki/Services/CoverageStore.swift` |
-| Backend sync contract | `Myshachki/Services/BackendSyncService.swift` |
+| Coverage persistence (local) | `Cheeseek/Services/CoverageStore.swift` |
+| Backend sync contract | `Cheeseek/Services/BackendSyncService.swift` |

@@ -17,21 +17,21 @@ MapLibre canvas has a real size.
 
 ## Deferred app changes from the stash
 
-- `Myshachki/Components/MapLibreMapView.swift`: large summary-map experiment with
+- `Cheeseek/Components/MapLibreMapView.swift`: large summary-map experiment with
   `persistsCoverage`, SVG summary overlay, preloaded building features, route
   layer restyling, summary route status handling, delayed refreshes, and JS error
   retry logging.
-- `Myshachki/ViewModels/WalkSummaryViewModel.swift`: summary-specific map style
+- `Cheeseek/ViewModels/WalkSummaryViewModel.swift`: summary-specific map style
   and perspective inputs, route interpolation, `summaryCoverageGeoJSON`, pace
   text, and route status changed to `summary`.
-- `Myshachki/Views/WalkSummaryView.swift`: removes the save button, increases
+- `Cheeseek/Views/WalkSummaryView.swift`: removes the save button, increases
   map height, passes map style/perspective data, disables persisted coverage for
   the summary map, and switches the secondary stat from new area to pace.
-- `Myshachki/Extensions/Formatting.swift`: adds `formattedPace`.
-- `Myshachki/Services/WalkLiveActivityService.swift`: resets existing Live
+- `Cheeseek/Extensions/Formatting.swift`: adds `formattedPace`.
+- `Cheeseek/Services/WalkLiveActivityService.swift`: resets existing Live
   Activities before starting a new one and makes start asynchronous.
-- `Myshachki/Views/ActivityView.swift`, `Myshachki/Views/MapScreen.swift`, and
-  `Myshachki/Views/RootTabView.swift`: pass current map style/perspective into
+- `Cheeseek/Views/ActivityView.swift`, `Cheeseek/Views/MapScreen.swift`, and
+  `Cheeseek/Views/RootTabView.swift`: pass current map style/perspective into
   summary screens from map and activity flows.
 
 Keep these deferred until the focused walk-summary autofit fix is checked.

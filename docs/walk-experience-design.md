@@ -1,4 +1,4 @@
-# Myshachki — Design Notes for F1, F3, F4
+# Cheeseek — Design Notes for F1, F3, F4
 
 **Date:** 2026-06-16
 **Status:** Proposal / "how we might do it" (no code yet).
@@ -30,7 +30,7 @@ The JS already computes the real covered features during the walk. Surface them 
 `WKScriptMessageHandler` bridge and make Swift the owner.
 
 **A. New message channel (WebView → Swift)**
-Add a third handler alongside `myshachkiReady` / `myshachkiMapInteraction`, e.g. `myshachkiCoverage`.
+Add a third handler alongside `cheeseekReady` / `cheeseekMapInteraction`, e.g. `cheeseekCoverage`.
 When the JS marks a new building covered (in `processRouteCoordinates`, where `persistedChanged = true`),
 post a compact payload:
 
@@ -78,13 +78,13 @@ struct CoveredBuilding: Codable, Identifiable, Equatable {
 - **Keep synthetic codec, just relabel.** Rejected: it never matches what's painted; the core complaint.
 
 ### Migration / risk
-- `localStorage` building cache (`myshachki.coveredBuildings.v2.*`) becomes a *cache*, not the source of
+- `localStorage` building cache (`cheeseek.coveredBuildings.v2.*`) becomes a *cache*, not the source of
   truth. On first run after F1, seed Swift from it once, then Swift drives.
 - Versioned storage key avoids mixing old synthetic IDs with new real IDs.
 
 ### Step-by-step
 1. Add `CoveredBuilding` model + `Coordinate2D` codable.
-2. Add `myshachkiCoverage` script message handler in `MapLibreMapView` + JS `postMessage` on
+2. Add `cheeseekCoverage` script message handler in `MapLibreMapView` + JS `postMessage` on
    `persistedChanged`.
 3. Plumb a callback `onCoverageChanged([CoveredBuilding])` up to `MapViewModel`.
 4. Switch `MapViewModel` coverage state, `CoverageStore`, and backend DTOs to `CoveredBuilding`.
@@ -145,7 +145,7 @@ covered building ids+polygons. Fully deterministic, offloads the device, and dov
 ### Test criteria
 - Walking the same physical path produces the same covered-building set at zoom 14 and zoom 18 (±0–1).
 - Entering a fresh area paints covered buildings within ≤1 s of arrival on a normal connection.
-- No regression in `[myshachki-perf]` average recompute time (watch the existing console counters).
+- No regression in `[cheeseek-perf]` average recompute time (watch the existing console counters).
 
 **Effort:** Step 1 = quick (½ day). Step 2 = Medium. Step 3 = High (server work).
 

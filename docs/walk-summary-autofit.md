@@ -14,7 +14,7 @@ The summary map runs in a `WKWebView` created with `frame: .zero`. MapLibre read
 animating, i.e. **before** SwiftUI gives the WebView its final size. Fitting against a ~0-size canvas
 does nothing, so the camera stays at the hardcoded initial position:
 
-```108:115:Myshachki/Components/MapLibreMapView.swift
+```108:115:Cheeseek/Components/MapLibreMapView.swift
         const map = new maplibregl.Map({
           container: 'map',
           style: fallbackStyle,
@@ -33,7 +33,7 @@ window-resize), **but nothing re-runs `fitBounds`**, so the camera never moves t
 ### Why tapping "Save to Shared Map" appears to fix it
 `WalkSummaryViewModel.routeGeoJSON` encodes the route status from the sync state:
 
-```47:49:Myshachki/ViewModels/WalkSummaryViewModel.swift
+```47:49:Cheeseek/ViewModels/WalkSummaryViewModel.swift
     var routeGeoJSON: String {
         guard session.points.count > 1 else { return emptyFeatureCollection }
         let routeStatus = syncStatusText == SyncStatus.synced.label ? "explored" : "active"
@@ -41,7 +41,7 @@ window-resize), **but nothing re-runs `fitBounds`**, so the camera never moves t
 
 When sync **succeeds**, `syncStatusText` becomes "Synced", so `routeStatus` flips `active → explored`.
 That changes the generated JS string, which **defeats the de-dup guard** in `Coordinator.enqueue`
-(`lastEvaluatedScript == script` no longer matches), so a fresh `myshachkiSetData(...)` →
+(`lastEvaluatedScript == script` no longer matches), so a fresh `cheeseekSetData(...)` →
 `applyData()` → `fitRouteBounds()` runs — and by now the WebView has its real size, so the fit works.
 
 So the button is not doing anything map-specific; it just triggers a **second fit after layout settles**.
@@ -52,14 +52,14 @@ Finish, regardless of backend.
 
 ## 2. The fix (recommended): re-fit on container resize + guard tiny canvas
 
-Two small, self-contained changes in `Myshachki/Components/MapLibreMapView.swift` (the embedded JS).
+Two small, self-contained changes in `Cheeseek/Components/MapLibreMapView.swift` (the embedded JS).
 No Swift/view changes required; backend-independent.
 
 ### Change A — guard `fitRouteBounds` against an unusable canvas size
 
 Find `fitRouteBounds` (around lines 1015–1029):
 
-```1015:1029:Myshachki/Components/MapLibreMapView.swift
+```1015:1029:Cheeseek/Components/MapLibreMapView.swift
         function fitRouteBounds() {
           const coordinates = currentRouteFeatures().flatMap(feature => feature.geometry.coordinates);
           if (coordinates.length < 2) {
@@ -132,7 +132,7 @@ expose a JS function and call it after presentation.
 **JS (MapLibreMapView html):** add near the other globals:
 
 ```js
-        window.myshachkiFitRoute = function() {
+        window.cheeseekFitRoute = function() {
           if (pending.options && pending.options.fitsRouteBounds) {
             map.resize();
             fitRouteBounds();
@@ -156,12 +156,12 @@ expose a JS function and call it after presentation.
                         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
 ```
 
-To call `window.myshachkiFitRoute()` you need a handle to the `WKWebView`. The cleanest way is to add an
+To call `window.cheeseekFitRoute()` you need a handle to the `WKWebView`. The cleanest way is to add an
 optional `onReady: (() -> Void)?` (or a `fitToken: Int`) to `MapLibreMapView`:
 
 - Add `var fitToken: Int = 0` to `MapLibreMapView`. Include it in the generated script as a harmless
   comment, e.g. append `// fit:\(fitToken)` to the `script` string in `updateUIView`. Because the string
-  changes, `Coordinator.enqueue`'s de-dup is bypassed and `myshachkiSetData` re-runs → re-fit. This is
+  changes, `Coordinator.enqueue`'s de-dup is bypassed and `cheeseekSetData` re-runs → re-fit. This is
   exactly what the Save button does today, but triggered deliberately.
 - In `WalkSummaryView`, keep `@State private var fitToken = 0` and bump it from `.task`/`.onAppear` after
   a short delay:
@@ -194,7 +194,7 @@ it is no longer required for the map to render correctly.
    backend offline ("Sync failed" is fine).
 3. Resize sanity check: rotate the simulator or present the sheet again — the map should re-fit, not jump
    to Warsaw.
-4. Console should not show repeated `fitBounds` errors; `[myshachki-perf]` logs continue normally.
+4. Console should not show repeated `fitBounds` errors; `[cheeseek-perf]` logs continue normally.
 
 > Related, but separate: the buildings rendering yellow/cumulative vs purple/this-session is the
 > `persistsCoverage` + load-order fix and the single-source-of-truth work (see
